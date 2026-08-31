@@ -15,7 +15,7 @@ from indico_group_registration.constants import MAX_GROUP_NAME_LENGTH
 from indico_group_registration.models.groups import GroupState, RegistrationGroup, generate_code
 from indico_group_registration.models.members import GroupMember
 from indico_group_registration.pricing import apply_group_pricing, clear_registration_pricing
-from indico_group_registration.util import get_group_settings
+from indico_group_registration.util import clear_plan_choice, get_group_settings
 
 
 #: Registrations in these states occupy a seat.
@@ -38,7 +38,11 @@ def lock_group(group):
               .filter(RegistrationGroup.id == group.id)
               .with_for_update()
               .one())
-    db.session.refresh(locked, ['members'])
+    # `expire`, not `refresh`: SQLAlchemy refuses to refresh a name that is a
+    # relationship rather than a column ("No column-based properties specified
+    # for refresh operation").  Expiring it drops the stale collection so the
+    # next access reloads it inside the lock, which is all we are after.
+    db.session.expire(locked, ['members'])
     return locked
 
 
@@ -158,6 +162,7 @@ def leave_group(registration, *, reason=None):
     db.session.delete(membership)
     db.session.flush()
     clear_registration_pricing(registration)
+    clear_plan_choice(registration)
 
     if group.leader_registration_id == registration.id:
         _transfer_leadership(group)

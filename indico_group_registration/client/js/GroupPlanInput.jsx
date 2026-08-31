@@ -91,10 +91,20 @@ export default function GroupPlanInput({
           response = await indicoAxios.get(checkCodeURL({event_id: eventId, reg_form_id: regformId}), {
             params: {code},
           });
-        } catch {
-          if (seq === lookupSeq.current) {
-            setLookup({state: 'error', error: Translate.string('Could not check that code.')});
+        } catch (error) {
+          if (seq !== lookupSeq.current) {
+            return;
           }
+          // The lookup is login-only, so that the endpoint cannot be used to
+          // guess codes. Somebody registering without an account still gets to
+          // join -- the code is checked again when they submit -- so this is a
+          // note about the preview, not an error about the code.
+          const status = error.response?.status;
+          setLookup(
+            status === 401 || status === 403
+              ? {state: 'unchecked'}
+              : {state: 'error', error: Translate.string('Could not check that code.')}
+          );
           return;
         }
         if (seq !== lookupSeq.current) {
@@ -234,6 +244,14 @@ export default function GroupPlanInput({
           </Form.Field>
 
           {lookup.state === 'error' && <Message negative>{lookup.error}</Message>}
+          {lookup.state === 'unchecked' && (
+            <Message info>
+              <Translate>
+                Log in to see the group before you join. You can register without an account -- the code
+                is checked either way when you submit.
+              </Translate>
+            </Message>
+          )}
           {lookup.state === 'found' && (
             <Message positive>
               <Message.Header>{lookup.group.name}</Message.Header>

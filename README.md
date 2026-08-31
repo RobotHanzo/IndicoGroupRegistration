@@ -16,16 +16,18 @@ Organizers set the plans and the disclaimer. They never have to create a group.
 
 ### Plans
 
-An organizer defines plans per registration form. A plan is a seat count and a
-rate:
+An organizer defines plans per registration form, one row per plan, in a table
+on the settings page:
 
-```json
-[
-  {"id": "p3",  "label": "Group of 3",  "size": 3,  "type": "percent", "value": 10},
-  {"id": "p10", "label": "Group of 10", "size": 10, "type": "percent", "value": 15},
-  {"id": "p25", "label": "Group of 25", "size": 25, "type": "amount",  "value": 50}
-]
-```
+| Plan | Seats | Discount | Off |
+| --- | --- | --- | --- |
+| Group of 3 | 3 | % off | 10 |
+| Group of 10 | 10 | % off | 15 |
+| Group of 25 | 25 | fixed amount off | 50 |
+
+Leave the discount columns empty for a plan that carries none. Each plan is
+given a hidden, permanent id when it is added, so renaming, repricing or
+reordering a plan never detaches the groups already formed under it.
 
 The seat count is both the **target and the cap**: filling it confirms the
 group, and the group is then full.
@@ -48,13 +50,22 @@ plugin reprices everyone — including people who have already paid.
 
 **Indico has no concept of a partial payment or a balance.** A transaction is
 one amount against one registration, and its checkout would charge the whole
-new price again rather than the difference. So an already-paid member whose
-price rises stays `complete` as far as Indico is concerned, and only this
-plugin knows they owe anything.
+new price again rather than the difference. Indico therefore reads an
+already-paid member whose price rose as settled, because their transaction is
+still successful.
 
-The plugin gives organizers a **Balances due** list (paid amount, new price,
-delta) and e-mails every affected member, but a person collects the money — at
-the desk or by transfer, recorded as a manual payment. Two settings soften it:
+The plugin corrects that where it counts. For as long as a member owes a
+top-up, their registration reads **awaiting payment** — in the registrant list,
+on their own page, and in the data the check-in app is given — and the online
+checkout is closed to them, with an explanation, so nobody pays the whole price
+a second time. It returns to complete on its own once the balance is settled.
+
+The plugin also gives organizers a **Balances due** list (paid amount, new
+price, delta) and e-mails every affected member, but a person collects the
+money — at the desk or by transfer, recorded as a manual payment. That page's
+**Refresh payment states** button puts every member's state back in step with
+what they owe; it is only needed for groups repriced before this version.
+Two settings soften the whole problem:
 
 - set the **reconciliation deadline** well before the event, so balances
   surface while there is still time to chase them;
@@ -69,6 +80,14 @@ themselves.
 
 The plugin does send e-mails that nobody can trigger on demand: group
 confirmed, group short with the new rate, and group dissolved.
+
+### Changing plan
+
+While a group is still forming and nobody in it has paid, the leader can move
+it onto another plan from the group panel. Only plans that seat everybody
+already in the group are offered, and the switch reprices every member at once.
+Once anybody has paid, the control disappears: one person's change must not
+quietly rebill somebody who has already handed money over.
 
 ## Installation
 
@@ -165,7 +184,7 @@ Nothing changes on a form until group registration is enabled for it.
 
 | Setting | Default | Notes |
 | --- | --- | --- |
-| Plans | – | JSON, validated on save |
+| Plans | – | A row per plan; validated on save |
 | Discount applies to | Registration fee | Or the whole price, including paid options |
 | Reconciliation deadline | Registration end | Set it well before the event |
 | Allow paying before the group fills | on | |

@@ -15,6 +15,7 @@ from indico.util.i18n import _
 from indico.web.args import use_kwargs
 from indico.web.flask.util import url_for
 from indico.web.rh import RHProtected
+from indico.web.util import jsonify_data
 
 from indico_group_registration.operations import GroupError, leave_group, switch_plan
 from indico_group_registration.plans import get_plan
@@ -34,8 +35,17 @@ class RHGroupBase(RHRegistrationFormRegistrationBase):
             raise NotFound
         self.group = self.membership.group
 
-    def _redirect_back(self):
-        return redirect(url_for('event_registration.display_regform', self.registration.locator.registrant))
+    def _done(self):
+        """Answer one of the group panel's action buttons.
+
+        The buttons are declarative AJAX actions with ``data-reload-after``, so
+        the answer has to be JSON.  A redirect would be followed by the AJAX
+        request itself, which renders the page -- and consumes the flashed
+        message -- somewhere the participant never sees, leaving the reload with
+        nothing to show.  ``flash=False`` keeps the message in the session for
+        the reload to pick up.
+        """
+        return jsonify_data(flash=False)
 
 
 class RHGroupLeaderBase(RHGroupBase):
@@ -89,6 +99,13 @@ class RHGroupJoinLink(RHRegistrationFormBase):
     """
 
     ALLOW_PROTECTED_EVENT = True
+    # URL normalization rebuilds this URL from the registration form's locator,
+    # which knows nothing about `join_uuid`.  Without preserving it `url_for`
+    # raises `BuildError` and every shared join link answers 404.
+    normalize_url_spec = {
+        'locators': {lambda self: self.regform},
+        'preserved_args': {'join_uuid'},
+    }
 
     def _process(self):
         join_uuid = request.view_args['join_uuid']
@@ -121,15 +138,15 @@ class RHLeaveGroup(RHGroupBase):
         if self.registration.is_paid:
             flash(_('You have already paid, so you cannot leave the group yourself. '
                     'Please contact the organizers.'), 'error')
-            return self._redirect_back()
+            return self._done()
         try:
             leave_group(self.registration)
         except GroupError as exc:
             flash(str(exc), 'error')
-            return self._redirect_back()
+            return self._done()
         db.session.commit()
         flash(_('You have left the group. The standard rate now applies.'), 'success')
-        return self._redirect_back()
+        return self._done()
 
 
 class RHRegenerateJoinLink(RHGroupLeaderBase):
@@ -140,7 +157,7 @@ class RHRegenerateJoinLink(RHGroupLeaderBase):
         self.group.join_uuid = str(uuid4())
         db.session.commit()
         flash(_('A new join link has been generated. The old one no longer works.'), 'success')
-        return self._redirect_back()
+        return self._done()
 
 
 class RHSwitchPlan(RHGroupLeaderBase):
@@ -151,12 +168,12 @@ class RHSwitchPlan(RHGroupLeaderBase):
         target = get_plan(get_plans(self.regform), plan)
         if target is None:
             flash(_('Unknown group plan.'), 'error')
-            return self._redirect_back()
+            return self._done()
         try:
             switch_plan(self.group, target)
         except GroupError as exc:
             flash(str(exc), 'error')
-            return self._redirect_back()
+            return self._done()
         db.session.commit()
         flash(_('Your group is now on the "{label}" plan.').format(label=target.label), 'success')
-        return self._redirect_back()
+        return self._done()

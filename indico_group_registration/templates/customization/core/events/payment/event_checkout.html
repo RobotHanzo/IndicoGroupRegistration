@@ -10,25 +10,51 @@
 
 {% block content %}
     {% set membership = registration.group_membership %}
-    {% if membership and membership.applied_amount %}
-        {% set group = membership.group %}
-        {% set plan = group.pricing_plan %}
-        <div class="info-message-box">
+    {% set group = membership.group if membership else none %}
+    {% if membership and membership.balance_due > 0 %}
+        {#
+            The group was repriced upward after this member paid.  Core's
+            checkout charges `registration.price` in full -- it has no notion of
+            a partial payment -- so letting them through here would take the
+            whole new price again on top of what they already handed over.  The
+            balance is collected off-platform and recorded by an organizer; see
+            the "Balances due" page in the management area.
+        #}
+        <div class="warning-message-box">
             <div class="message-text">
                 {% trans name=group.name,
-                         amount=(-membership.applied_amount) | format_currency(registration.currency) -%}
-                    This price includes a group discount of {{ amount }} for the group "{{ name }}".
+                         paid=format_currency(membership.paid_amount, registration.currency),
+                         price=registration.render_price(),
+                         balance=format_currency(membership.balance_due, registration.currency) -%}
+                    Your group "{{ name }}" did not reach the size its rate required, so your registration now
+                    costs {{ price }}. You have already paid {{ paid }}, which leaves {{ balance }} outstanding.
                 {%- endtrans %}
-                {% if group.state.name == 'forming' %}
-                    {% trans count=group.member_count, target=group.target_size -%}
-                        The group has {{ count }} of the {{ target }} members its rate requires. If it does not
-                        reach {{ target }} by the deadline, you will be asked to pay the difference.
-                    {%- endtrans %}
-                {% elif group.state.name == 'confirmed' %}
-                    {% trans %}The group is confirmed, so this amount is final.{% endtrans %}
-                {% endif %}
+                {% trans -%}
+                    This page can only take the full amount again, so it cannot be used to settle the difference.
+                    Please contact the event organizers to arrange payment of the outstanding amount.
+                {%- endtrans %}
             </div>
         </div>
+    {% else %}
+        {% if membership and membership.applied_amount %}
+            {% set plan = group.pricing_plan %}
+            <div class="info-message-box">
+                <div class="message-text">
+                    {% trans name=group.name,
+                             amount=format_currency(-membership.applied_amount, registration.currency) -%}
+                        This price includes a group discount of {{ amount }} for the group "{{ name }}".
+                    {%- endtrans %}
+                    {% if group.state.name == 'forming' %}
+                        {% trans count=group.member_count, target=group.target_size -%}
+                            The group has {{ count }} of the {{ target }} members its rate requires. If it does not
+                            reach {{ target }} by the deadline, you will be asked to pay the difference.
+                        {%- endtrans %}
+                    {% elif group.state.name == 'confirmed' %}
+                        {% trans %}The group is confirmed, so this amount is final.{% endtrans %}
+                    {% endif %}
+                </div>
+            </div>
+        {% endif %}
+        {{ super() }}
     {% endif %}
-    {{ super() }}
 {% endblock %}

@@ -1,22 +1,82 @@
 """The organizer's settings form."""
 
-import json
+from uuid import uuid4
 
 from wtforms.fields import BooleanField, IntegerField, SelectField, TextAreaField
 from wtforms.validators import NumberRange, Optional, ValidationError
 
 from indico.util.i18n import _
 from indico.web.forms.base import IndicoForm
-from indico.web.forms.fields import IndicoDateTimeField
+from indico.web.forms.fields import IndicoDateTimeField, MultipleItemsField
 from indico.web.forms.widgets import SwitchWidget
 
-from indico_group_registration.plans import APPLIES_TO_BASE, APPLIES_TO_TOTAL, PlanError, group_plans, parse_plans
+from indico_group_registration.plans import (AMOUNT, APPLIES_TO_BASE, APPLIES_TO_TOTAL, MAX_PLAN_SIZE, PERCENT,
+                                             PlanError, group_plans, parse_plans)
 
 
-PLANS_PLACEHOLDER = json.dumps([
-    {'id': 'p3', 'label': 'Group of 3', 'size': 3, 'type': 'percent', 'value': 10},
-    {'id': 'p10', 'label': 'Group of 10', 'size': 10, 'type': 'percent', 'value': 15},
-], indent=2)
+def _new_plan_id():
+    """A short, opaque id for a newly added plan.
+
+    Groups store the id of the plan they were created under, so it has to
+    survive an organizer renaming, reordering or repricing the row it came
+    from -- which is why it is generated rather than typed.
+    """
+    return f'plan-{uuid4().hex[:8]}'
+
+
+def _coerce_seats(value):
+    try:
+        return int(str(value).strip())
+    except (TypeError, ValueError):
+        raise ValidationError(_('The seat count must be a whole number.'))
+
+
+class GroupPlansField(MultipleItemsField):
+    """The plan table, as one row per plan.
+
+    ``id`` is carried as an opaque key: the widget hands back whatever id a row
+    already had and leaves a new row without one, so `process_formdata` is the
+    only place a plan is ever given an id.  Nothing an organizer types can
+    change the id of an existing plan, which is what keeps groups attached to
+    the plan they were created under.
+    """
+
+    def __init__(self, *args, **kwargs):
+        kwargs.setdefault('fields', [
+            {'id': 'label', 'caption': _('Plan'), 'type': 'text', 'required': True},
+            {'id': 'size', 'caption': _('Seats'), 'type': 'number', 'required': True,
+             'min': 1, 'max': MAX_PLAN_SIZE, 'step': 1, 'coerce': _coerce_seats},
+            {'id': 'type', 'caption': _('Discount'), 'type': 'select'},
+            {'id': 'value', 'caption': _('Off'), 'type': 'number', 'min': 0, 'step': 0.01},
+        ])
+        kwargs.setdefault('choices', {'type': {PERCENT: _('% off'), AMOUNT: _('fixed amount off')}})
+        kwargs.setdefault('uuid_field', 'id')
+        kwargs.setdefault('uuid_field_opaque', True)
+        kwargs.setdefault('sortable', True)
+        kwargs.setdefault('unique_field', 'label')
+        super().__init__(*args, **kwargs)
+
+    def process_data(self, value):
+        """Turn stored plans into rows the widget can render.
+
+        A plan with no discount is stored with ``None`` for its type and value;
+        the widget's ``<select>`` and number input want an empty string, and a
+        literal ``None`` would be printed into the table as text.
+        """
+        super().process_data(value)
+        self.data = [{
+            'id': plan.get('id') or '',
+            'label': plan.get('label') or '',
+            'size': plan.get('size') or '',
+            'type': plan.get('type') or '',
+            'value': '' if plan.get('value') in (None, '') else plan['value'],
+        } for plan in (self.data or []) if isinstance(plan, dict)]
+
+    def process_formdata(self, valuelist):
+        super().process_formdata(valuelist)
+        for row in (self.data or []):
+            if not row.get('id'):
+                row['id'] = _new_plan_id()
 
 
 class GroupSettingsForm(IndicoForm):
@@ -24,12 +84,11 @@ class GroupSettingsForm(IndicoForm):
                            description=_('Let participants create their own groups on this registration form. '
                                          'Existing registrations are not affected.'))
 
-    plans = TextAreaField(_('Plans'),
-                          description=_('A JSON list of plans. Each needs an "id", a "label" and a "size" (the '
-                                        'number of seats), plus a "type" of "percent" or "amount" and a "value" '
-                                        'if it carries a discount. The seat count is both the target and the cap: '
-                                        'filling it confirms the group.'),
-                          render_kw={'rows': 12, 'placeholder': PLANS_PLACEHOLDER})
+    plans = GroupPlansField(_('Plans'),
+                            description=_('One row per plan. The seat count is both the target and the cap: filling '
+                                          'it confirms the group and closes it. A plan with a single seat never '
+                                          'forms a group, so leave those out unless you want the standard rate '
+                                          'listed. Leave the discount empty for a plan that carries none.'))
 
     applies_to = SelectField(_('Discount applies to'),
                              choices=[(APPLIES_TO_BASE, _('The registration fee only')),
@@ -66,23 +125,30 @@ class GroupSettingsForm(IndicoForm):
                                                   'time of acceptance are recorded against each membership.'))
 
     def __init__(self, *args, event=None, **kwargs):
-        super().__init__(*args, **kwargs)
+        # `IndicoDateTimeField.timezone` is a read-only property: it reads
+        # `self.get_form().timezone` and only falls back to the *user's* timezone
+        # when the form has none.  So the timezone is handed over as a plain
+        # attribute on the form, before the fields are bound -- assigning to the
+        # field's property raises `AttributeError`.
         if event is not None:
-            self.reconciliation_dt.timezone = event.timezone
+            self.timezone = event.timezone
+        super().__init__(*args, **kwargs)
 
     def validate_plans(self, field):
-        raw = (field.data or '').strip()
-        if not raw:
+        rows = field.data or []
+        if not rows:
             if self.enabled.data:
                 raise ValidationError(_('Add at least one group plan before enabling group registration.'))
             field.parsed = ()
             return
         try:
-            parsed = json.loads(raw)
-        except ValueError as exc:
-            raise ValidationError(_('That is not valid JSON: {error}').format(error=exc))
-        try:
-            plans = parse_plans(parsed)
+            plans = parse_plans([{
+                'id': row.get('id'),
+                'label': row.get('label'),
+                'size': row.get('size'),
+                'type': row.get('type') or None,
+                'value': row.get('value') or 0,
+            } for row in rows])
         except PlanError as exc:
             raise ValidationError(str(exc))
         if self.enabled.data and not group_plans(plans):

@@ -51,3 +51,26 @@
     color: #767676;
   }
 }
+
+// The leader's plan switcher, shown while the group is forming and unpaid.
+.group-registration-switch {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.6em;
+  margin: 1em 0;
+  padding: 0.8em 1em;
+  border: 1px solid #eee;
+  border-radius: 3px;
+  background: #fafafa;
+
+  label {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  select {
+    flex: 1 1 12em;
+    min-width: 12em;
+  }
+}

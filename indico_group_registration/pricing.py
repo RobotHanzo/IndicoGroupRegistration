@@ -9,7 +9,9 @@ import threading
 from contextlib import contextmanager
 from decimal import Decimal
 
+from indico.core import signals
 from indico.core.db import db
+from indico.modules.events.registration.models.registrations import RegistrationState
 
 from indico_group_registration.plans import discount_for, discountable_amount, quantize
 from indico_group_registration.util import get_discount_data, get_group_settings, set_discount_data
@@ -118,9 +120,36 @@ def _sync(registration):
     For an unpaid member whose price rose this is a no-op; for one whose price
     fell to zero it completes them.  A paid registration is left alone by
     `sync_state` itself, because its transaction is still successful -- which
-    is precisely why a repriced payer ends up owing a balance nobody is
-    automatically asked for.
+    is what `sync_balance_state` then has to correct.
     """
     if registration is None or registration.is_deleted:
         return
     registration.sync_state()
+    sync_balance_state(registration)
+
+
+def sync_balance_state(registration):
+    """Show a member who owes a top-up as awaiting payment.
+
+    Indico decides "paid" from the transaction alone, so a member whose group
+    was repriced upward after they paid still reads as settled everywhere it
+    matters -- the registrant list, their own page, and the data the check-in
+    app is given.  A balance nobody is shown is a balance nobody collects, so
+    the registration goes back to `unpaid` for exactly as long as one is due,
+    and returns to `complete` once it is not.
+
+    Only ever moves between those two states: a pending, rejected or withdrawn
+    registration is somebody else's decision and is left alone.
+    """
+    membership = registration.group_membership
+    if membership is None:
+        return
+    previous_state = registration.state
+    owes_balance = membership.balance_due > 0
+    if owes_balance and previous_state == RegistrationState.complete:
+        registration.state = RegistrationState.unpaid
+    elif not owes_balance and previous_state == RegistrationState.unpaid and registration.is_paid:
+        registration.state = RegistrationState.complete
+    else:
+        return
+    signals.event.registration_state_updated.send(registration, previous_state=previous_state)

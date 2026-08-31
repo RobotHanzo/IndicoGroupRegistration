@@ -240,8 +240,12 @@ class GroupDiscountField(RegistrationFormFieldBase):
 
 
 def _format_number(value):
-    """Render a Decimal without trailing zeroes (15 rather than 15.00)."""
+    """Render a Decimal without trailing zeroes (15 rather than 15.00).
+
+    The `f` format is what keeps this readable: `Decimal('10.0').normalize()` is
+    `Decimal('1E+1')`, and `str()` on that puts "1E+1% off" on the invoice.
+    """
     normalized = value.normalize()
     if normalized == normalized.to_integral_value():
-        return str(normalized.to_integral_value())
-    return str(normalized)
+        return format(normalized.to_integral_value(), 'f')
+    return format(normalized, 'f')

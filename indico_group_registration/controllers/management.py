@@ -1,7 +1,5 @@
 """Organizer-facing endpoints."""
 
-import json
-
 from flask import flash, redirect, request, session
 from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import NotFound
@@ -12,7 +10,7 @@ from indico.modules.events.registration.controllers.management import RHManageRe
 from indico.modules.events.registration.models.forms import RegistrationForm
 from indico.modules.events.registration.views import WPManageRegistration
 from indico.modules.logs import EventLogRealm, LogKind
-from indico.util.i18n import _
+from indico.util.i18n import _, ngettext
 from indico.web.forms.base import FormDefaults
 from indico.web.util import jsonify_data
 
@@ -22,6 +20,7 @@ from indico_group_registration.models.members import GroupMember
 from indico_group_registration.models.settings import GroupSettings
 from indico_group_registration.notifications import notify_group_dissolved
 from indico_group_registration.operations import dissolve_group
+from indico_group_registration.pricing import pricing_in_progress, sync_balance_state
 from indico_group_registration.reconcile import reconcile_group
 from indico_group_registration.util import get_group_settings, provision_fields
 
@@ -90,7 +89,7 @@ class RHGroupSettings(RHGroupRegFormBase):
         settings = self.settings
         defaults = FormDefaults(
             enabled=settings.enabled if settings else False,
-            plans=json.dumps(settings.plans, indent=2) if settings and settings.plans else '',
+            plans=(settings.plans if settings and settings.plans else []),
             applies_to=settings.applies_to if settings else 'base',
             reconciliation_dt=settings.reconciliation_dt if settings else None,
             allow_early_payment=settings.allow_early_payment if settings else True,
@@ -170,7 +169,48 @@ class RHGroupBalances(RHGroupRegFormBase):
                                                    regform=self.regform, rows=rows, total=total)
 
 
+class RHRefreshBalanceStates(RHGroupRegFormBase):
+    """Put every member's payment state back in step with what they owe.
+
+    The plugin does this whenever it reprices somebody, so this exists for the
+    memberships repriced before the plugin knew how to: it is the one action
+    that fixes a registration still showing as settled while a balance is open.
+    """
+
+    def _process(self):
+        members = (GroupMember.query
+                   .join(GroupMember.group)
+                   .filter(RegistrationGroup.registration_form_id == self.regform.id)
+                   .options(joinedload(GroupMember.registration), joinedload(GroupMember.group))
+                   .all())
+        changed = 0
+        with pricing_in_progress():
+            for member in members:
+                registration = member.registration
+                if registration is None or registration.is_deleted:
+                    continue
+                before = registration.state
+                sync_balance_state(registration)
+                changed += registration.state != before
+        db.session.commit()
+        if changed:
+            flash(ngettext('One registration was moved to "awaiting payment" or back.',
+                           '{n} registrations were moved to "awaiting payment" or back.',
+                           changed).format(n=changed), 'success')
+        else:
+            flash(_('Every registration already shows the right payment state.'), 'info')
+        return jsonify_data(flash=False)
+
+
 class RHGroupActionBase(RHGroupRegFormBase):
+    # The base class normalizes against the registration form's locator, which
+    # has no `group_id`.  The extra view arg then looks like a mismatch, and
+    # normalization answers a POST with 404 -- so normalize against the group
+    # itself, whose locator is the form's plus `group_id`.
+    normalize_url_spec = {
+        'locators': {lambda self: self.group}
+    }
+
     def _process_args(self):
         RHGroupRegFormBase._process_args(self)
         self.group = (RegistrationGroup.query

@@ -1,5 +1,6 @@
 """The plugin class: everything this plugin hooks into, in one place."""
 
+from importlib import import_module
 from pathlib import Path
 
 from flask import session
@@ -15,9 +16,10 @@ from indico.web.menu import SideMenuItem
 from indico_group_registration.blueprint import blueprint
 from indico_group_registration.fields import GroupDiscountField, GroupPlanField
 from indico_group_registration.handlers import (get_locked_field_reason, handle_registration_created,
-                                                handle_registration_deleted, handle_registration_state_updated)
+                                                handle_registration_deleted, handle_registration_state_updated,
+                                                handle_registration_updated)
 from indico_group_registration.reglist import GroupListItem
-from indico_group_registration.util import is_enabled
+from indico_group_registration.util import get_switchable_plans, is_enabled
 
 
 class GroupRegistrationPlugin(IndicoPlugin):
@@ -45,6 +47,7 @@ class GroupRegistrationPlugin(IndicoPlugin):
 
         # Registration lifecycle.
         self.connect(signals.event.registration_created, self._registration_created)
+        self.connect(signals.event.registration_updated, self._registration_updated)
         self.connect(signals.event.registration_deleted, self._registration_deleted)
         self.connect(signals.event.registration_state_updated, self._registration_state_updated)
         self.connect(signals.event.is_field_data_locked, self._is_field_data_locked)
@@ -60,6 +63,12 @@ class GroupRegistrationPlugin(IndicoPlugin):
         # Our own template overrides live here; see `templates/core/` for what
         # is overridden and why.
         self.connect(signals.plugin.get_template_customization_paths, self._get_template_customization_paths)
+
+        # Celery only sees tasks in modules that have actually been imported,
+        # and nothing imports `tasks` on its own -- loading the plugin only
+        # imports this module.  Without this the reconciliation task is never
+        # registered and unfilled groups are never repriced.
+        self.connect(signals.core.import_tasks, self._import_tasks)
 
         # The plan picker is a React component in the registration form.
         self.inject_bundle('main.js', WPDisplayRegistrationFormConference)
@@ -81,6 +90,9 @@ class GroupRegistrationPlugin(IndicoPlugin):
     def _registration_created(self, registration, **kwargs):
         handle_registration_created(registration)
 
+    def _registration_updated(self, registration, **kwargs):
+        handle_registration_updated(registration)
+
     def _registration_deleted(self, registration, **kwargs):
         handle_registration_deleted(registration)
 
@@ -100,6 +112,11 @@ class GroupRegistrationPlugin(IndicoPlugin):
         return SideMenuItem('group_registration', _('Group registration'),
                             url_for_plugin('group_registration.manage_overview', event),
                             section='organization', weight=-10)
+
+    def _import_tasks(self, sender, **kwargs):
+        # Imported for its side effect: the module body is what registers the
+        # periodic task with Celery.
+        import_module('indico_group_registration.tasks')
 
     def _get_template_customization_paths(self, sender, **kwargs):
         """Override the checkout page so the group discount is named there too.
@@ -123,7 +140,8 @@ class GroupRegistrationPlugin(IndicoPlugin):
         return tpl.render_group_panel(membership=membership,
                                       group=membership.group,
                                       registration=registration,
-                                      from_management=from_management)
+                                      from_management=from_management,
+                                      switchable_plans=get_switchable_plans(membership.group))
 
     def _inject_regform_settings(self, regform, **kwargs):
         """A row in the registration form's settings box."""

@@ -7,7 +7,11 @@ from indico.core.celery import celery
 from indico_group_registration.reconcile import reconcile_due_groups
 
 
-@celery.periodic_task(name='group_registration_reconcile', run_every=crontab(minute='*/15'))
+# `plugin=` is what puts the task inside this plugin's context.  Without it
+# `get_plugin_template_module` cannot find the e-mail templates and the
+# repricing notice blows up in the worker rather than reaching anyone.
+@celery.periodic_task(name='group_registration_reconcile', run_every=crontab(minute='*/15'),
+                      plugin='group_registration')
 def reconcile_groups():
     """Reprice groups whose reconciliation deadline has passed.
 

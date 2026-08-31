@@ -18,7 +18,7 @@ The amount payable for your registration is now {{ price }}.
 {%- endtrans %}
 
 {% if member.balance_due > 0 %}
-{% trans balance=member.balance_due|format_currency(registration.currency) -%}
+{% trans balance=format_currency(member.balance_due, registration.currency) -%}
 You have an outstanding balance of {{ balance }}. Please contact the event organizers to settle it.
 {%- endtrans %}
 {% elif registration.state.name == 'unpaid' %}

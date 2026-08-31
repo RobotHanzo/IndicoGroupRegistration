@@ -6,7 +6,7 @@ from indico.modules.events.registration.models.items import RegistrationFormSect
 from indico.util.i18n import _
 
 from indico_group_registration.constants import (DISCOUNT_FIELD, DISCOUNT_FIELD_TITLE, DISCOUNT_SECTION_TITLE,
-                                                 PLAN_FIELD, PLAN_FIELD_TITLE)
+                                                 MODE_NONE, PLAN_FIELD, PLAN_FIELD_TITLE)
 from indico_group_registration.models.groups import CODE_ALPHABET, CODE_LENGTH, GroupState, RegistrationGroup
 from indico_group_registration.plans import parse_plans
 
@@ -90,6 +90,27 @@ def get_membership(registration):
     return registration.group_membership
 
 
+def get_switchable_plans(group):
+    """The plans a forming group's leader could still move it onto.
+
+    Empty whenever switching is impossible, so the panel can simply hide the
+    control rather than reproduce the rules `operations.switch_plan` enforces:
+    the group must still be forming, nobody may have paid, and a plan has to
+    seat everybody who has already joined.
+    """
+    from indico_group_registration.models.groups import GroupState
+    from indico_group_registration.plans import group_plans
+
+    if group.state != GroupState.forming:
+        return ()
+    if any(member.registration is not None and member.registration.is_paid for member in group.members):
+        return ()
+    count = group.member_count
+    options = tuple(plan for plan in group_plans(group.plans) if plan.size >= count)
+    # A single option that is the plan they are already on is not a choice.
+    return options if len(options) > 1 else ()
+
+
 # -- field provisioning ------------------------------------------------------
 #
 # The discount field has to exist on the form as a real item, because a
@@ -110,9 +131,16 @@ def _create_section(regform, title, *, manager_only):
 
 
 def _create_field(regform, section, input_type, title):
-    field = RegistrationFormField(registration_form=regform, input_type=input_type, title=title, is_required=False)
-    section.children.append(field)
+    # `parent=` rather than `section.children.append(field)`.  Appending forces
+    # the section's `children` collection to load, and that query autoflushes
+    # the half-built field -- which at that point still has no `parent_id` and
+    # so trips the `ck_form_items_top_level_sections` check constraint.  Setting
+    # the many-to-one side never loads the collection, which is also how core's
+    # own `RHRegistrationFormAddField` does it.
+    field = RegistrationFormField(parent=section, registration_form=regform, input_type=input_type,
+                                  title=title, is_required=False)
     field.data, field.versioned_data = field.field_impl.process_field_data({})
+    db.session.add(field)
     db.session.flush()
     return field
 
@@ -169,13 +197,33 @@ def set_discount_data(registration, value):
     field = provision_discount_field(registration.registration_form)
     data = registration.data_by_field.get(field.id)
     if data is None:
+        # Passing `registration=` already puts the row into `registration.data`
+        # through the backref.  Appending it again leaves the same object in the
+        # collection twice, and every in-session price calculation -- the
+        # confirmation e-mail's included -- then counts the discount twice.
         data = RegistrationData(registration=registration, field_data=field.current_data)
-        registration.data.append(data)
     else:
         # Point at the current version so the row does not pin an old one.
         data.field_data = field.current_data
     data.data = value
     return data
+
+
+def clear_plan_choice(registration):
+    """Forget what a registration asked for once it is out of its group.
+
+    Leaving a group has to clear the answer, not just the membership: the
+    answer is what `handlers.handle_registration_updated` reads, so a stale
+    "join ABCD-2345" would quietly put the person back into the group they left
+    the next time they edited anything on their registration.
+    """
+    field = find_field(registration.registration_form, PLAN_FIELD)
+    if field is None:
+        return
+    data = registration.data_by_field.get(field.id)
+    if data is None:
+        return
+    data.data = {'mode': MODE_NONE}
 
 
 def get_plan_choice(registration):

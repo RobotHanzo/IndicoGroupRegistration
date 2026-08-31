@@ -1,4 +1,4 @@
-{% macro render_group_panel(membership, group, registration, from_management=false) %}
+{% macro render_group_panel(membership, group, registration, from_management=false, switchable_plans=()) %}
     {% set plan = group.pricing_plan %}
     {% set chosen = group.chosen_plan %}
     {% set is_leader = group.leader_registration_id == registration.id %}
@@ -55,7 +55,7 @@
                 </p>
                 {% if membership.balance_due > 0 %}
                     <div class="i-callout warning">
-                        {% trans balance=membership.balance_due | format_currency(registration.currency) -%}
+                        {% trans balance=format_currency(membership.balance_due, registration.currency) -%}
                             You have an outstanding balance of {{ balance }}. Please contact the organizers to
                             settle it.
                         {%- endtrans %}
@@ -113,10 +113,38 @@
             </table>
 
             {% if not from_management %}
+                {% if is_leader and group.state.name == 'forming' and switchable_plans %}
+                    {#
+                        A leader may still move the group to another plan while
+                        nobody has paid.  The endpoint refuses the rest, so this
+                        only has to offer what is plausible: plans that seat at
+                        least the members already in.
+                    #}
+                    <div class="group-registration-switch">
+                        <label for="group-plan-switch">{% trans %}Change plan{% endtrans %}</label>
+                        <select id="group-plan-switch">
+                            {% for option in switchable_plans %}
+                                <option value="{{ option.id }}" {{ 'selected' if option.id == group.plan_id }}>
+                                    {% trans label=option.label, size=option.size -%}
+                                        {{ label }} -- {{ size }} seats
+                                    {%- endtrans %}
+                                </option>
+                            {% endfor %}
+                        </select>
+                        <button class="i-button"
+                                data-href="{{ url_for_plugin('group_registration.switch_plan', **registration.locator.registrant) }}"
+                                data-method="POST"
+                                data-params-selector='{"plan": "#group-plan-switch"}'
+                                data-reload-after
+                                data-confirm="{% trans %}Move the group onto the selected plan? Everyone in the group is repriced.{% endtrans %}">
+                            {% trans %}Switch{% endtrans %}
+                        </button>
+                    </div>
+                {% endif %}
                 <div class="toolbar f-j-end">
                     {% if is_leader and group.state.name == 'forming' %}
                         <button class="i-button icon-link"
-                                data-href="{{ url_for_plugin('group_registration.regenerate_link', group.registration_form) }}"
+                                data-href="{{ url_for_plugin('group_registration.regenerate_link', **registration.locator.registrant) }}"
                                 data-method="POST"
                                 data-reload-after
                                 data-confirm="{% trans %}Generate a new join link? Every link you have already shared will stop working.{% endtrans %}">
@@ -125,7 +153,7 @@
                     {% endif %}
                     {% if group.state.name in ('forming', 'confirmed') and not registration.is_paid %}
                         <button class="i-button icon-exit"
-                                data-href="{{ url_for_plugin('group_registration.leave_group', group.registration_form) }}"
+                                data-href="{{ url_for_plugin('group_registration.leave_group', **registration.locator.registrant) }}"
                                 data-method="POST"
                                 data-reload-after
                                 data-confirm="{% trans %}Leave this group? The standard rate will apply to your registration.{% endtrans %}">

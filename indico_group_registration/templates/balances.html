@@ -15,6 +15,13 @@
            href="{{ url_for_plugin('group_registration.manage_groups', regform) }}">
             {% trans %}Groups{% endtrans %}
         </a>
+        <button class="i-button icon-loop"
+                data-href="{{ url_for_plugin('group_registration.refresh_balance_states', regform) }}"
+                data-method="POST"
+                data-reload-after
+                data-confirm="{% trans %}Put every member's payment state back in step with what they owe? Members with an open balance move to "awaiting payment"; members who owe nothing move back to complete.{% endtrans %}">
+            {% trans %}Refresh payment states{% endtrans %}
+        </button>
     </div>
 
     {% if not rows %}
@@ -27,6 +34,10 @@
                 These people paid before their group was repriced. Indico cannot charge a difference -- a payment is
                 one amount against one registration -- so these balances have to be collected at the desk or by
                 transfer and then recorded against the registration as a manual payment.
+            {%- endtrans %}
+            {% trans -%}
+                Until then each of them shows as "awaiting payment", here and in the check-in app, and the online
+                checkout is closed to them so that nobody pays the whole price a second time.
             {%- endtrans %}
         {% endcall %}
 
@@ -57,10 +68,10 @@
                                 {{ member.group.member_count }} / {{ member.group.target_size }}
                             </div>
                         </td>
-                        <td class="text-right">{{ member.paid_amount | format_currency(registration.currency) }}</td>
+                        <td class="text-right">{{ format_currency(member.paid_amount, registration.currency) }}</td>
                         <td class="text-right">{{ registration.render_price() }}</td>
                         <td class="text-right">
-                            <strong>{{ member.balance_due | format_currency(registration.currency) }}</strong>
+                            <strong>{{ format_currency(member.balance_due, registration.currency) }}</strong>
                         </td>
                     </tr>
                 {% endfor %}
@@ -69,7 +80,7 @@
                 <tr>
                     <td colspan="4" class="text-right"><strong>{% trans %}Total outstanding{% endtrans %}</strong></td>
                     <td class="text-right">
-                        <strong>{{ total | format_currency(regform.currency) }}</strong>
+                        <strong>{{ format_currency(total, regform.currency) }}</strong>
                     </td>
                 </tr>
             </tfoot>

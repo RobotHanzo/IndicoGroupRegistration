@@ -5,7 +5,7 @@ from indico.util.i18n import _
 from indico_group_registration.constants import DISCOUNT_FIELD, MODE_CREATE, MODE_JOIN, MODE_NONE, PLAN_FIELD
 from indico_group_registration.operations import GroupError, create_group, join_group, leave_group, recount_group
 from indico_group_registration.plans import get_plan
-from indico_group_registration.pricing import is_pricing_in_progress
+from indico_group_registration.pricing import is_pricing_in_progress, pricing_in_progress, sync_balance_state
 from indico_group_registration.util import (find_group_by_code, get_group_settings, get_plan_choice, get_plans,
                                             is_enabled)
 
@@ -41,6 +41,22 @@ def handle_registration_created(registration):
         join_group(registration, group, disclaimer_version=disclaimer_version)
 
 
+def handle_registration_updated(registration):
+    """Act on a group chosen while editing an existing registration.
+
+    Core only fires `registration_created` for a brand-new registration, so
+    without this a participant who registered alone and later edited their
+    answer to create or join a group would get the answer recorded and nothing
+    else: no group, no rate, no panel.
+
+    Somebody already in a group has the field locked, so core never writes to
+    it and there is nothing here to act on.
+    """
+    if registration.group_membership is not None:
+        return
+    handle_registration_created(registration)
+
+
 def handle_registration_deleted(registration):
     """Free the seat a deleted registration was holding."""
     if registration.group_membership is None:
@@ -52,7 +68,8 @@ def handle_registration_state_updated(registration):
     """Recount after a state change that may have crossed the counting line.
 
     Withdrawal and rejection free a seat; approval can fill the last one and
-    auto-confirm the group.
+    auto-confirm the group.  This is also where a member who has just settled
+    (or just stopped owing) a repricing balance gets their state put right.
     """
     if is_pricing_in_progress():
         # Our own `sync_state` calls land here; they never change who counts.
@@ -61,6 +78,10 @@ def handle_registration_state_updated(registration):
     if membership is None:
         return
     recount_group(membership.group)
+    with pricing_in_progress():
+        # Re-entrant: `sync_balance_state` sends the same signal, and the guard
+        # above is what stops it coming back round.
+        sync_balance_state(registration)
 
 
 def get_locked_field_reason(form_item, registration):

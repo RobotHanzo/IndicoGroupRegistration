@@ -29,7 +29,7 @@ The amount payable for your registration is now {{ price }}.
 {%- endtrans %}
 
 {% if balance_due > 0 %}
-{% trans paid=paid_amount|format_currency(registration.currency), balance=balance_due|format_currency(registration.currency) -%}
+{% trans paid=format_currency(paid_amount, registration.currency), balance=format_currency(balance_due, registration.currency) -%}
 You have already paid {{ paid }}, which leaves an outstanding balance of {{ balance }}.
 {%- endtrans %}
 
