@@ -1,0 +1,139 @@
+{% macro render_group_panel(membership, group, registration, from_management=false) %}
+    {% set plan = group.pricing_plan %}
+    {% set chosen = group.chosen_plan %}
+    {% set is_leader = group.leader_registration_id == registration.id %}
+    {% set join_url = url_for_plugin('group_registration.join_link', group.registration_form,
+                                     join_uuid=group.join_uuid, _external=true) %}
+
+    <div class="i-box group-registration-panel" data-group-state="{{ group.state.name }}">
+        <div class="i-box-header">
+            <div class="i-box-title">
+                {% trans name=group.name %}Group: {{ name }}{% endtrans %}
+            </div>
+            <div class="i-box-metadata">
+                <span class="label">{{ group.state.title }}</span>
+                <span class="content">
+                    {%- if group.state.name == 'forming' -%}
+                        {% trans count=group.member_count, target=group.target_size -%}
+                            {{ count }} of {{ target }} members
+                        {%- endtrans %}
+                    {%- else -%}
+                        {% trans count=group.member_count %}{{ count }} members{% endtrans %}
+                    {%- endif -%}
+                </span>
+            </div>
+        </div>
+        <div class="i-box-content">
+
+            {% if group.state.name == 'forming' %}
+                <p>
+                    {% trans seats=group.seats_left, target=group.target_size, label=chosen.label if chosen else '' -%}
+                        Your group needs {{ seats }} more member(s) to reach {{ target }} and confirm the
+                        "{{ label }}" rate. Share the code or the link below -- it will confirm itself the moment
+                        the last seat is filled.
+                    {%- endtrans %}
+                </p>
+            {% elif group.state.name == 'confirmed' %}
+                <p>
+                    {% trans label=chosen.label if chosen else '' -%}
+                        This group is confirmed on the "{{ label }}" rate. The amount you pay will not change.
+                    {%- endtrans %}
+                </p>
+            {% elif group.state.name == 'short' %}
+                <p>
+                    {% if plan %}
+                        {% trans aimed=chosen.label if chosen else '', label=plan.label -%}
+                            This group did not reach the "{{ aimed }}" seat count by the deadline, so the
+                            "{{ label }}" rate was applied instead.
+                        {%- endtrans %}
+                    {% else %}
+                        {% trans aimed=chosen.label if chosen else '' -%}
+                            This group did not reach the "{{ aimed }}" seat count by the deadline and does not
+                            qualify for a group rate, so the standard rate now applies.
+                        {%- endtrans %}
+                    {% endif %}
+                </p>
+                {% if membership.balance_due > 0 %}
+                    <div class="i-callout warning">
+                        {% trans balance=membership.balance_due | format_currency(registration.currency) -%}
+                            You have an outstanding balance of {{ balance }}. Please contact the organizers to
+                            settle it.
+                        {%- endtrans %}
+                    </div>
+                {% endif %}
+            {% elif group.state.name == 'dissolved' %}
+                <p>
+                    {% trans %}This group has been dissolved by the organizers and no group rate applies.{% endtrans %}
+                </p>
+            {% endif %}
+
+            {% if group.state.name == 'forming' %}
+                <div class="group-registration-share">
+                    <label class="group-registration-share__label" for="group-code">
+                        {% trans %}Group code{% endtrans %}
+                    </label>
+                    <input id="group-code" class="group-registration-share__value" type="text" readonly
+                           value="{{ group.formatted_code }}"
+                           data-copy-value="{{ group.code }}">
+
+                    <label class="group-registration-share__label" for="group-link">
+                        {% trans %}Join link{% endtrans %}
+                    </label>
+                    <input id="group-link" class="group-registration-share__value" type="text" readonly
+                           value="{{ join_url }}"
+                           data-copy-value="{{ join_url }}">
+                </div>
+                <p class="text-not-important">
+                    {% trans %}Send these to the people you want in your group however you like -- we do not e-mail them for you.{% endtrans %}
+                </p>
+            {% endif %}
+
+            <table class="group-registration-members">
+                <thead>
+                    <tr>
+                        <th>{% trans %}Member{% endtrans %}</th>
+                        <th>{% trans %}Status{% endtrans %}</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for member in group.members %}
+                        {% if member.registration and not member.registration.is_deleted %}
+                            <tr>
+                                <td>
+                                    {{ member.registration.full_name }}
+                                    {%- if group.leader_registration_id == member.registration_id %}
+                                        <span class="text-not-important">({% trans %}leader{% endtrans %})</span>
+                                    {%- endif %}
+                                </td>
+                                <td>{{ member.registration.state.title }}</td>
+                            </tr>
+                        {% endif %}
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            {% if not from_management %}
+                <div class="toolbar f-j-end">
+                    {% if is_leader and group.state.name == 'forming' %}
+                        <button class="i-button icon-link"
+                                data-href="{{ url_for_plugin('group_registration.regenerate_link', group.registration_form) }}"
+                                data-method="POST"
+                                data-reload-after
+                                data-confirm="{% trans %}Generate a new join link? Every link you have already shared will stop working.{% endtrans %}">
+                            {% trans %}New join link{% endtrans %}
+                        </button>
+                    {% endif %}
+                    {% if group.state.name in ('forming', 'confirmed') and not registration.is_paid %}
+                        <button class="i-button icon-exit"
+                                data-href="{{ url_for_plugin('group_registration.leave_group', group.registration_form) }}"
+                                data-method="POST"
+                                data-reload-after
+                                data-confirm="{% trans %}Leave this group? The standard rate will apply to your registration.{% endtrans %}">
+                            {% trans %}Leave group{% endtrans %}
+                        </button>
+                    {% endif %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+{% endmacro %}

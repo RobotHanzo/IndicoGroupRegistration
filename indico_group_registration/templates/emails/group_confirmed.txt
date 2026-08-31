@@ -1,0 +1,29 @@
+{% extends 'emails/base.txt' %}
+
+{% block subject -%}
+    {% trans name=group.name %}Your group "{{ name }}" is confirmed{% endtrans %}
+{%- endblock %}
+
+{% block header_recipient -%}
+    {% trans name=registration.first_name %}Dear {{ name }}{% endtrans %}
+{%- endblock %}
+
+{% block body -%}
+{% set plan = group.pricing_plan -%}
+{% trans name=group.name, count=group.member_count, title=event.title -%}
+Your group "{{ name }}" reached {{ count }} members and is now confirmed for {{ title }}.
+{%- endtrans %}
+
+{% trans price=registration.render_price() -%}
+The amount you pay is {{ price }}. This is final -- it will not change if members join or leave from now on.
+{%- endtrans %}
+{% if registration.state.name == 'unpaid' %}
+
+{% trans url=url_for('event_registration.display_regform', registration.locator.registrant, _external=true) -%}
+You can pay here: {{ url }}
+{%- endtrans %}
+{%- elif registration.is_paid %}
+
+{% trans %}You have already paid, so there is nothing further to do.{% endtrans %}
+{%- endif %}
+{%- endblock %}

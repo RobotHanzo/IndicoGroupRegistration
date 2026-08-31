@@ -1,0 +1,34 @@
+{#
+    Names the group discount on the checkout page, which core renders as a bare
+    total with no breakdown and no template hook.
+
+    This is not a fork.  Indico's customization loader resolves a leading `~`
+    to the *original* template, so this file inherits everything core does and
+    only prepends a box.  If core rewrites the page, we inherit the rewrite.
+#}
+{% extends '~events/payment/event_checkout.html' %}
+
+{% block content %}
+    {% set membership = registration.group_membership %}
+    {% if membership and membership.applied_amount %}
+        {% set group = membership.group %}
+        {% set plan = group.pricing_plan %}
+        <div class="info-message-box">
+            <div class="message-text">
+                {% trans name=group.name,
+                         amount=(-membership.applied_amount) | format_currency(registration.currency) -%}
+                    This price includes a group discount of {{ amount }} for the group "{{ name }}".
+                {%- endtrans %}
+                {% if group.state.name == 'forming' %}
+                    {% trans count=group.member_count, target=group.target_size -%}
+                        The group has {{ count }} of the {{ target }} members its rate requires. If it does not
+                        reach {{ target }} by the deadline, you will be asked to pay the difference.
+                    {%- endtrans %}
+                {% elif group.state.name == 'confirmed' %}
+                    {% trans %}The group is confirmed, so this amount is final.{% endtrans %}
+                {% endif %}
+            </div>
+        </div>
+    {% endif %}
+    {{ super() }}
+{% endblock %}

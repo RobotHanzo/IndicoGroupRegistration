@@ -1,0 +1,53 @@
+{% extends 'events/management/base.html' %}
+{% from 'message_box.html' import message_box %}
+
+{% block title %}
+    {% trans %}Group registration{% endtrans %}
+{% endblock %}
+
+{% block content %}
+    {% if not rows %}
+        {% call message_box('info') %}
+            {% trans %}This event has no registration forms yet.{% endtrans %}
+        {% endcall %}
+    {% else %}
+        <table class="i-table-widget">
+            <thead>
+                <tr>
+                    <th>{% trans %}Registration form{% endtrans %}</th>
+                    <th>{% trans %}Group registration{% endtrans %}</th>
+                    <th class="text-right">{% trans %}Groups{% endtrans %}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                    <tr>
+                        <td>{{ row.regform.title }}</td>
+                        <td>
+                            {% if row.settings and row.settings.enabled %}
+                                <span class="icon-checkmark text-color success"></span>
+                                {% trans %}Enabled{% endtrans %}
+                            {% else %}
+                                <span class="text-not-important">{% trans %}Off{% endtrans %}</span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">{{ row.group_count or '' }}</td>
+                        <td class="text-right">
+                            <a class="i-button text-color borderless icon-settings"
+                               href="{{ url_for_plugin('group_registration.manage_settings', row.regform) }}">
+                                {% trans %}Configure{% endtrans %}
+                            </a>
+                            {% if row.settings and row.settings.enabled %}
+                                <a class="i-button text-color borderless icon-users"
+                                   href="{{ url_for_plugin('group_registration.manage_groups', row.regform) }}">
+                                    {% trans %}Groups{% endtrans %}
+                                </a>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}

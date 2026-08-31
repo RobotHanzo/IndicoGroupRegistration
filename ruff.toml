@@ -1,0 +1,80 @@
+# Kept close to Indico core's own ruff config so the plugin reads like the
+# codebase it extends.
+target-version = 'py312'
+line-length = 120
+extend-exclude = ['.venv', 'build', 'dist', '*.egg-info']
+output-prefer-rule-codes = true
+
+[lint]
+preview = true
+dummy-variable-rgx = '^(_{2,}|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$'  # a single `_` is already used for i18n
+
+select = [
+    'E',      # pycodestyle (errors)
+    'W',      # pycodestyle (warnings)
+    'F',      # pyflakes
+    'N',      # pep8-naming
+    'Q',      # flake8-quotes
+    'RUF',    # ruff
+    'UP',     # pyupgrade
+    'S',      # flake8-bandit
+    'C4',     # flake8-comprehensions
+    'LOG',    # flake8-logging
+    'G',      # flake8-logging-format
+    'B',      # flake8-bugbear
+    'A001',   # flake8-builtins
+    'T10',    # flake8-debugger
+    'ISC',    # flake8-implicit-str-concat
+    'PIE',    # flake8-pie
+    'PT',     # flake8-pytest-style
+    'RSE',    # flake8-raise
+    'RET504', # flake8-return
+    'SIM',    # flake8-simplify
+    'TID',    # flake8-tidy-imports
+    'PGH',    # pygrep-hooks
+    # 'I' (isort) is deliberately off: ruff cannot reproduce the grid-style
+    # import wrapping Indico uses, and matching core is worth more here.
+]
+ignore = [
+    'E226',    # allow omitting whitespace around arithmetic operators
+    'E731',    # allow assigning lambdas
+    'RUF012',  # dicts in classvars are very common
+    'S101',    # asserts are fine, we do not run python with `-O`
+    'B904',    # too noisy
+    'SIM105',  # try-except-pass is faster and people are used to it
+    'SIM108',  # noisy ternary
+    'SIM117',  # nested context managers may be more readable
+    'PT011',   # very noisy
+    'BLE001',  # the Sentry hooks catch broad exceptions on purpose
+    'RUF067',  # we have code in __init__.py, like indico plugins generally do
+    'RUF201',  # we use rule codes everywhere, like indico core
+]
+
+[format]
+quote-style = 'single'
+preview = true
+
+[lint.flake8-builtins]
+builtins-ignorelist = ['id', 'format', 'input', 'type']
+
+[lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+parametrize-names-type = 'tuple'
+parametrize-values-type = 'tuple'
+parametrize-values-row-type = 'tuple'
+
+[lint.flake8-quotes]
+inline-quotes = 'single'
+multiline-quotes = 'single'
+docstring-quotes = 'double'
+avoid-escape = true
+
+[lint.per-file-ignores]
+# broad excepts are the whole point in the Sentry hooks
+'indico_sentry/util.py' = ['S110']
+'indico_sentry/hooks.py' = ['S110']
+'indico_sentry/client.py' = ['S110']
+'indico_sentry/context.py' = ['S110']
+# sample rates are passed through unchanged, so exact comparison is correct
+'tests/*' = ['S105', 'S106', 'RUF069']

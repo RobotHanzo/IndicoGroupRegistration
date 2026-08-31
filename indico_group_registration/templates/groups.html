@@ -1,0 +1,94 @@
+{% extends 'events/management/base.html' %}
+{% from 'message_box.html' import message_box %}
+
+{% block title %}
+    {% trans %}Groups{% endtrans %}
+{% endblock %}
+
+{% block subtitle %}
+    {{ regform.title }}
+{% endblock %}
+
+{% block content %}
+    <div class="toolbar f-j-end">
+        <a class="i-button icon-settings"
+           href="{{ url_for_plugin('group_registration.manage_settings', regform) }}">
+            {% trans %}Settings{% endtrans %}
+        </a>
+        <a class="i-button icon-coins"
+           href="{{ url_for_plugin('group_registration.manage_balances', regform) }}">
+            {% trans %}Balances due{% endtrans %}
+        </a>
+    </div>
+
+    {% if not groups %}
+        {% call message_box('info') %}
+            {% trans %}Nobody has created a group on this form yet.{% endtrans %}
+        {% endcall %}
+    {% else %}
+        <table class="i-table-widget">
+            <thead>
+                <tr>
+                    <th>{% trans %}Group{% endtrans %}</th>
+                    <th>{% trans %}Code{% endtrans %}</th>
+                    <th>{% trans %}Leader{% endtrans %}</th>
+                    <th>{% trans %}Plan{% endtrans %}</th>
+                    <th class="text-right">{% trans %}Seats{% endtrans %}</th>
+                    <th>{% trans %}State{% endtrans %}</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for group in groups %}
+                    {% set plan = group.pricing_plan %}
+                    <tr>
+                        <td>{{ group.name }}</td>
+                        <td><code>{{ group.formatted_code }}</code></td>
+                        <td>
+                            {%- if group.leader_registration -%}
+                                {{ group.leader_registration.full_name }}
+                            {%- else -%}
+                                <span class="text-not-important">{% trans %}None{% endtrans %}</span>
+                            {%- endif -%}
+                        </td>
+                        <td>
+                            {{- plan.label if plan else _('Standard rate') -}}
+                            {%- if group.state.name == 'short' and group.plan_id != group.effective_plan_id %}
+                                <span class="text-not-important">
+                                    ({% trans label=group.chosen_plan.label if group.chosen_plan else '?' -%}
+                                        aimed for {{ label }}
+                                    {%- endtrans %})
+                                </span>
+                            {% endif %}
+                        </td>
+                        <td class="text-right">{{ group.member_count }} / {{ group.target_size }}</td>
+                        <td>{{ group.state.title }}</td>
+                        <td class="text-right">
+                            {% if group.state.name == 'forming' %}
+                                <button class="i-button text-color borderless icon-loop js-reconcile"
+                                        data-href="{{ url_for_plugin('group_registration.reconcile_group', group) }}"
+                                        data-method="POST"
+                                        data-reload-after
+                                        data-confirm="{% trans %}Reprice this group now, as if the deadline had passed?{% endtrans %}">
+                                    {% trans %}Reprice now{% endtrans %}
+                                </button>
+                            {% endif %}
+                            {% if group.state.name != 'dissolved' %}
+                                <button class="i-button text-color borderless icon-remove js-dissolve"
+                                        data-href="{{ url_for_plugin('group_registration.dissolve_group', group) }}"
+                                        data-method="POST"
+                                        data-reload-after
+                                        data-confirm="{% trans name=group.name -%}
+                                            Dissolve "{{ name }}"? Every member goes back to the standard rate and
+                                            anyone who already paid will owe the difference.
+                                        {%- endtrans %}">
+                                    {% trans %}Dissolve{% endtrans %}
+                                </button>
+                            {% endif %}
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    {% endif %}
+{% endblock %}

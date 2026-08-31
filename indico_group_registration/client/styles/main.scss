@@ -1,0 +1,53 @@
+// Styles for the server-rendered group panel on the registration summary page.
+// The plan picker inside the React form has its own CSS module.
+
+.group-registration-panel {
+  margin-bottom: 1em;
+}
+
+.group-registration-share {
+  display: grid;
+  grid-template-columns: max-content 1fr max-content;
+  align-items: center;
+  gap: 0.6em 1em;
+  margin: 1em 0;
+}
+
+.group-registration-share__label {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.group-registration-share__value {
+  width: 100%;
+  padding: 0.45em 0.6em;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+  background: #fff;
+  font-family: monospace;
+  font-size: 1em;
+}
+
+.group-registration-share__copy {
+  white-space: nowrap;
+}
+
+.group-registration-members {
+  width: 100%;
+  margin: 1em 0;
+  border-collapse: collapse;
+
+  th,
+  td {
+    padding: 0.4em 0.6em;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+  }
+
+  th {
+    font-size: 0.85em;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #767676;
+  }
+}

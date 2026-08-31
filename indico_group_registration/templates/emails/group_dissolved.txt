@@ -1,0 +1,31 @@
+{% extends 'emails/base.txt' %}
+
+{% block subject -%}
+    {% trans name=group.name %}Your group "{{ name }}" has been dissolved{% endtrans %}
+{%- endblock %}
+
+{% block header_recipient -%}
+    {% trans name=registration.first_name %}Dear {{ name }}{% endtrans %}
+{%- endblock %}
+
+{% block body -%}
+{% trans name=group.name, title=event.title -%}
+The organizers of {{ title }} have dissolved the group "{{ name }}". The group rate no longer applies to your registration.
+{%- endtrans %}
+
+{% trans price=registration.render_price() -%}
+The amount payable for your registration is now {{ price }}.
+{%- endtrans %}
+
+{% if member.balance_due > 0 %}
+{% trans balance=member.balance_due|format_currency(registration.currency) -%}
+You have an outstanding balance of {{ balance }}. Please contact the event organizers to settle it.
+{%- endtrans %}
+{% elif registration.state.name == 'unpaid' %}
+{% trans url=url_for('event_registration.display_regform', registration.locator.registrant, _external=true) -%}
+You can pay here: {{ url }}
+{%- endtrans %}
+{% endif %}
+
+{% trans %}If you think this is a mistake, please contact the event organizers.{% endtrans %}
+{%- endblock %}

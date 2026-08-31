@@ -1,0 +1,20 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+*.mo
+
+# Plugin asset build artifacts
+node_modules/
+indico_group_registration/static/dist/
+webpack-build-config.json
+url_map.json

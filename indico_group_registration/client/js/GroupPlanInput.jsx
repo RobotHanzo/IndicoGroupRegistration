@@ -1,0 +1,298 @@
+// The participant-facing plan picker.
+//
+// It writes a single object into the registration form:
+//   {mode: 'none' | 'create' | 'join', plan, name, code, accepted}
+// The backend validates the same shape again -- this component exists to make
+// the choice, and its consequences, legible before anyone submits.
+
+import checkCodeURL from 'indico-url:plugin_group_registration.check_code';
+
+import _ from 'lodash';
+import PropTypes from 'prop-types';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useField} from 'react-final-form';
+import {Checkbox, Form, Input, Loader, Message, Radio} from 'semantic-ui-react';
+
+import {Param, Translate} from 'indico/react/i18n';
+import {indicoAxios} from 'indico/utils/axios';
+
+import './GroupPlanInput.module.scss';
+
+const MODE_NONE = 'none';
+const MODE_CREATE = 'create';
+const MODE_JOIN = 'join';
+
+const EMPTY = {mode: MODE_NONE, plan: null, name: '', code: '', accepted: false};
+
+function formatMoney(amount, currency) {
+  try {
+    return new Intl.NumberFormat(document.documentElement.lang || 'en', {
+      style: 'currency',
+      currency,
+    }).format(amount);
+  } catch {
+    return `${amount} ${currency}`;
+  }
+}
+
+/** What one member pays under a plan, given the standard fee. */
+function planPrice(plan, basePrice) {
+  if (!plan || !plan.type || !plan.value) {
+    return basePrice;
+  }
+  const discount = plan.type === 'percent' ? (basePrice * plan.value) / 100 : plan.value;
+  return Math.max(basePrice - Math.min(discount, basePrice), 0);
+}
+
+/** The code as it is shown: two halves, because people retype it. */
+function normalizeCode(value) {
+  return (value || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+}
+
+export default function GroupPlanInput({
+  htmlName,
+  disabled,
+  eventId,
+  regformId,
+  plans,
+  currency,
+  basePrice,
+  disclaimer,
+  allowEarlyPayment,
+  enabled,
+}) {
+  const {input} = useField(htmlName, {allowNull: true});
+  const value = input.value || EMPTY;
+  const groupPlans = useMemo(() => plans.filter(p => p.size > 1), [plans]);
+
+  const [lookup, setLookup] = useState({state: 'idle'});
+  const lookupSeq = useRef(0);
+
+  const update = useCallback(
+    patch => {
+      input.onChange({...EMPTY, ...value, ...patch});
+    },
+    [input, value]
+  );
+
+  // -- code lookup ---------------------------------------------------------
+
+  const runLookup = useMemo(
+    () =>
+      _.debounce(async code => {
+        const seq = ++lookupSeq.current;
+        if (code.length < 4) {
+          setLookup({state: 'idle'});
+          return;
+        }
+        setLookup({state: 'loading'});
+        let response;
+        try {
+          response = await indicoAxios.get(checkCodeURL({event_id: eventId, reg_form_id: regformId}), {
+            params: {code},
+          });
+        } catch {
+          if (seq === lookupSeq.current) {
+            setLookup({state: 'error', error: Translate.string('Could not check that code.')});
+          }
+          return;
+        }
+        if (seq !== lookupSeq.current) {
+          // A newer keystroke already won.
+          return;
+        }
+        setLookup(
+          response.data.valid
+            ? {state: 'found', group: response.data}
+            : {state: 'error', error: response.data.error}
+        );
+      }, 400),
+    [eventId, regformId]
+  );
+
+  useEffect(() => {
+    if (value.mode === MODE_JOIN) {
+      runLookup(normalizeCode(value.code));
+    } else {
+      setLookup({state: 'idle'});
+    }
+    return () => runLookup.cancel();
+  }, [value.mode, value.code, runLookup]);
+
+  // A join link drops the code in the query string; pick it up once.
+  const prefilled = useRef(false);
+  useEffect(() => {
+    if (prefilled.current || disabled) {
+      return;
+    }
+    prefilled.current = true;
+    const code = new URLSearchParams(window.location.search).get('group_code');
+    if (code) {
+      input.onChange({...EMPTY, mode: MODE_JOIN, code: normalizeCode(code)});
+    }
+    // Only ever runs once, deliberately.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [disabled]);
+
+  if (!enabled || !groupPlans.length) {
+    return null;
+  }
+
+  const chosenPlan = groupPlans.find(p => p.id === value.plan) || null;
+  const needsAcceptance = value.mode === MODE_CREATE || value.mode === MODE_JOIN;
+
+  return (
+    <div styleName="group-plan" data-mode={value.mode}>
+      <Form.Group grouped>
+        <Radio
+          label={Translate.string('Register individually')}
+          checked={value.mode === MODE_NONE}
+          disabled={disabled}
+          onChange={() => input.onChange({...EMPTY})}
+        />
+        <Radio
+          label={Translate.string('Create a group and invite people')}
+          checked={value.mode === MODE_CREATE}
+          disabled={disabled}
+          onChange={() => update({mode: MODE_CREATE, code: '', accepted: false})}
+        />
+        <Radio
+          label={Translate.string('Join a group with a code')}
+          checked={value.mode === MODE_JOIN}
+          disabled={disabled}
+          onChange={() => update({mode: MODE_JOIN, plan: null, name: '', accepted: false})}
+        />
+      </Form.Group>
+
+      {value.mode === MODE_CREATE && (
+        <div styleName="panel">
+          <div styleName="plans">
+            {groupPlans.map(plan => (
+              <label key={plan.id} styleName="plan" data-selected={plan.id === value.plan}>
+                <Radio
+                  checked={plan.id === value.plan}
+                  disabled={disabled}
+                  onChange={() => update({plan: plan.id, accepted: false})}
+                />
+                <span styleName="plan-label">{plan.label}</span>
+                <span styleName="plan-seats">
+                  <Translate>
+                    <Param name="size" value={plan.size} /> members
+                  </Translate>
+                </span>
+                <span styleName="plan-price">
+                  {formatMoney(planPrice(plan, basePrice), currency)}
+                  <small>
+                    <Translate>each</Translate>
+                  </small>
+                </span>
+              </label>
+            ))}
+          </div>
+
+          <Form.Field required>
+            <label htmlFor="group-name-input">
+              <Translate>Group name</Translate>
+            </label>
+            <Input
+              id="group-name-input"
+              value={value.name}
+              disabled={disabled}
+              maxLength={80}
+              placeholder={Translate.string('e.g. your department or company')}
+              onChange={(evt, {value: name}) => update({name})}
+            />
+          </Form.Field>
+
+          {chosenPlan && (
+            <Message info>
+              <Translate>
+                You will get a code and a link to share. Your group confirms itself as soon as{' '}
+                <Param name="size" value={chosenPlan.size} /> people have joined, and the rate is
+                then final.
+              </Translate>
+            </Message>
+          )}
+        </div>
+      )}
+
+      {value.mode === MODE_JOIN && (
+        <div styleName="panel">
+          <Form.Field required>
+            <label htmlFor="group-code-input">
+              <Translate>Group code</Translate>
+            </label>
+            <Input
+              id="group-code-input"
+              value={value.code}
+              disabled={disabled}
+              maxLength={9}
+              placeholder="ABCD-2345"
+              onChange={(evt, {value: code}) => update({code: normalizeCode(code), accepted: false})}
+              icon={lookup.state === 'loading' ? <Loader active inline size="tiny" /> : undefined}
+            />
+          </Form.Field>
+
+          {lookup.state === 'error' && <Message negative>{lookup.error}</Message>}
+          {lookup.state === 'found' && (
+            <Message positive>
+              <Message.Header>{lookup.group.name}</Message.Header>
+              <p>
+                <Translate>
+                  <Param name="members" value={lookup.group.members} /> of{' '}
+                  <Param name="target" value={lookup.group.target} /> members ·{' '}
+                  <Param
+                    name="price"
+                    value={formatMoney(planPrice(lookup.group.plan, basePrice), currency)}
+                  />{' '}
+                  for you
+                </Translate>
+              </p>
+            </Message>
+          )}
+        </div>
+      )}
+
+      {needsAcceptance && (
+        <div styleName="disclaimer">
+          {disclaimer && <p>{disclaimer}</p>}
+          {!allowEarlyPayment && (
+            <p>
+              <Translate>
+                You will not be able to pay until your group is complete.
+              </Translate>
+            </p>
+          )}
+          <Checkbox
+            label={Translate.string('I understand and accept these conditions')}
+            checked={!!value.accepted}
+            disabled={disabled}
+            onChange={(evt, {checked}) => update({accepted: checked})}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+GroupPlanInput.propTypes = {
+  htmlName: PropTypes.string.isRequired,
+  disabled: PropTypes.bool,
+  eventId: PropTypes.number.isRequired,
+  regformId: PropTypes.number.isRequired,
+  plans: PropTypes.array,
+  currency: PropTypes.string.isRequired,
+  basePrice: PropTypes.number,
+  disclaimer: PropTypes.string,
+  allowEarlyPayment: PropTypes.bool,
+  enabled: PropTypes.bool,
+};
+
+GroupPlanInput.defaultProps = {
+  disabled: false,
+  plans: [],
+  basePrice: 0,
+  disclaimer: '',
+  allowEarlyPayment: true,
+  enabled: false,
+};

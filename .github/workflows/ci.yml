@@ -1,0 +1,139 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Indico refuses to read a config file it cannot find; /dev/null gives it
+  # the defaults, which is all the tests need.
+  INDICO_CONFIG: /dev/null
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install ruff
+        run: pip install ruff
+
+      - name: ruff check
+        run: ruff check --output-format=github .
+
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12']
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # Indico depends on psycopg2 (not psycopg2-binary), which is built from
+      # source and needs the PostgreSQL client headers.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq-dev
+
+      - name: Install the plugin and its dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Run tests
+        run: pytest -v --cov=indico_group_registration --cov-report=term-missing --cov-report=xml
+
+      # The unit tests deliberately avoid the database, so this is the only
+      # place the modules that talk to it get exercised at all.
+      - name: Import every module
+        run: |
+          python - <<'PY'
+          import importlib, pkgutil, sys
+          import indico_group_registration as pkg
+          failed = []
+          for mod in pkgutil.walk_packages(pkg.__path__, f'{pkg.__name__}.'):
+              try:
+                  importlib.import_module(mod.name)
+              except Exception as exc:
+                  failed.append(f'{mod.name}: {type(exc).__name__}: {exc}')
+          if failed:
+              sys.exit('\n'.join(failed))
+          print('all modules import')
+          PY
+
+      - name: Upload coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}
+          path: coverage.xml
+          if-no-files-found: ignore
+
+  build:
+    name: Build distributions
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install build tooling
+        run: pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check metadata
+        run: twine check --strict dist/*
+
+      - name: Make sure templates and migrations are in the wheel
+        run: |
+          python - <<'PY'
+          import pathlib, zipfile, sys
+          wheel = next(pathlib.Path('dist').glob('*.whl'))
+          names = zipfile.ZipFile(wheel).namelist()
+          required = [
+              'indico_group_registration/templates/_group_panel.html',
+              'indico_group_registration/templates/settings.html',
+              'indico_group_registration/templates/emails/group_short.txt',
+              ('indico_group_registration/templates/customization/core/events/'
+               'payment/event_checkout.html'),
+          ]
+          missing = [n for n in required if n not in names]
+          # Migration filenames carry a date prefix, so match on the directory.
+          if not any(n.startswith('indico_group_registration/migrations/') and n.endswith('.py')
+                     for n in names):
+              missing.append('indico_group_registration/migrations/*.py')
+          if missing:
+              sys.exit(f'missing from {wheel.name}: {missing}')
+          print(f'{wheel.name} looks good')
+          PY
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/

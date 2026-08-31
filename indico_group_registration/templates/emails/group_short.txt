@@ -1,0 +1,44 @@
+{% extends 'emails/base.txt' %}
+
+{% block subject -%}
+    {% trans name=group.name %}The rate for your group "{{ name }}" has changed{% endtrans %}
+{%- endblock %}
+
+{% block header_recipient -%}
+    {% trans name=registration.first_name %}Dear {{ name }}{% endtrans %}
+{%- endblock %}
+
+{% block body -%}
+{% set plan = group.pricing_plan -%}
+{% trans name=group.name, target=group.target_size, count=group.member_count -%}
+Registration has closed and your group "{{ name }}" did not reach the {{ target }} members its rate required. It finished with {{ count }}.
+{%- endtrans %}
+
+{% if plan %}
+{% trans label=plan.label -%}
+Your group still qualifies for the "{{ label }}" rate, which has been applied.
+{%- endtrans %}
+{% else %}
+{% trans -%}
+Your group does not qualify for a group rate, so the standard rate now applies.
+{%- endtrans %}
+{% endif %}
+
+{% trans price=registration.render_price() -%}
+The amount payable for your registration is now {{ price }}.
+{%- endtrans %}
+
+{% if balance_due > 0 %}
+{% trans paid=paid_amount|format_currency(registration.currency), balance=balance_due|format_currency(registration.currency) -%}
+You have already paid {{ paid }}, which leaves an outstanding balance of {{ balance }}.
+{%- endtrans %}
+
+{% trans -%}
+Please contact the event organizers to settle it. Registrations with an unpaid balance may be cancelled, and entry to the event may be refused.
+{%- endtrans %}
+{% elif registration.state.name == 'unpaid' %}
+{% trans url=url_for('event_registration.display_regform', registration.locator.registrant, _external=true) -%}
+You can pay here: {{ url }}
+{%- endtrans %}
+{% endif %}
+{%- endblock %}

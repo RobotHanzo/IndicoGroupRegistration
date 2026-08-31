@@ -1,0 +1,21 @@
+{% macro render_settings_row(regform) %}
+    {% set settings = regform.group_settings %}
+    <div class="i-box-header">
+        <div class="i-box-title">{% trans %}Group registration{% endtrans %}</div>
+    </div>
+    <div class="i-box-content">
+        <p>
+            {% if settings and settings.enabled %}
+                {% trans %}Participants can create their own groups on this form and earn a plan-based discount.{% endtrans %}
+            {% else %}
+                {% trans %}Participants cannot create groups on this form.{% endtrans %}
+            {% endif %}
+        </p>
+        <div class="toolbar f-j-end">
+            <a class="i-button icon-settings"
+               href="{{ url_for_plugin('group_registration.manage_settings', regform) }}">
+                {% trans %}Configure group registration{% endtrans %}
+            </a>
+        </div>
+    </div>
+{% endmacro %}

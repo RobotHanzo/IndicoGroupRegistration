@@ -1,0 +1,5 @@
+{
+  "entry": {
+    "main": ["./js/index.jsx", "./styles/main.scss"]
+  }
+}

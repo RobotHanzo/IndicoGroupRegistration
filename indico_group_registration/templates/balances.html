@@ -1,0 +1,78 @@
+{% extends 'events/management/base.html' %}
+{% from 'message_box.html' import message_box %}
+
+{% block title %}
+    {% trans %}Balances due{% endtrans %}
+{% endblock %}
+
+{% block subtitle %}
+    {{ regform.title }}
+{% endblock %}
+
+{% block content %}
+    <div class="toolbar f-j-end">
+        <a class="i-button icon-users"
+           href="{{ url_for_plugin('group_registration.manage_groups', regform) }}">
+            {% trans %}Groups{% endtrans %}
+        </a>
+    </div>
+
+    {% if not rows %}
+        {% call message_box('success') %}
+            {% trans %}Nobody owes a balance. Every group member has paid at least what their registration now costs.{% endtrans %}
+        {% endcall %}
+    {% else %}
+        {% call message_box('warning') %}
+            {% trans -%}
+                These people paid before their group was repriced. Indico cannot charge a difference -- a payment is
+                one amount against one registration -- so these balances have to be collected at the desk or by
+                transfer and then recorded against the registration as a manual payment.
+            {%- endtrans %}
+        {% endcall %}
+
+        <table class="i-table-widget">
+            <thead>
+                <tr>
+                    <th>{% trans %}Participant{% endtrans %}</th>
+                    <th>{% trans %}Group{% endtrans %}</th>
+                    <th class="text-right">{% trans %}Paid{% endtrans %}</th>
+                    <th class="text-right">{% trans %}Now owes{% endtrans %}</th>
+                    <th class="text-right">{% trans %}Balance{% endtrans %}</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for member in rows %}
+                    {% set registration = member.registration %}
+                    <tr>
+                        <td>
+                            <a href="{{ url_for('event_registration.registration_details', registration) }}">
+                                {{ registration.full_name }}
+                            </a>
+                            <div class="text-not-important">{{ registration.email }}</div>
+                        </td>
+                        <td>
+                            {{ member.group.name }}
+                            <div class="text-not-important">
+                                {{ member.group.state.title }} ·
+                                {{ member.group.member_count }} / {{ member.group.target_size }}
+                            </div>
+                        </td>
+                        <td class="text-right">{{ member.paid_amount | format_currency(registration.currency) }}</td>
+                        <td class="text-right">{{ registration.render_price() }}</td>
+                        <td class="text-right">
+                            <strong>{{ member.balance_due | format_currency(registration.currency) }}</strong>
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4" class="text-right"><strong>{% trans %}Total outstanding{% endtrans %}</strong></td>
+                    <td class="text-right">
+                        <strong>{{ total | format_currency(regform.currency) }}</strong>
+                    </td>
+                </tr>
+            </tfoot>
+        </table>
+    {% endif %}
+{% endblock %}

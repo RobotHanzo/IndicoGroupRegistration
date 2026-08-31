@@ -1,0 +1,45 @@
+[build-system]
+requires = ['hatchling==1.27.0']
+build-backend = 'hatchling.build'
+
+[project]
+name = 'indico-plugin-group-registration'
+description = 'Participant-run group registration with plan-based discounts for Indico'
+readme = 'README.md'
+license = 'MIT'
+authors = [{ name = 'RobotHanzo' }]
+classifiers = [
+    'Environment :: Plugins',
+    'Environment :: Web Environment',
+    'License :: OSI Approved :: MIT License',
+    'Programming Language :: Python :: 3.12',
+]
+requires-python = '>=3.12.2, <3.13'
+dynamic = ['version']
+dependencies = [
+    'indico>=3.3',
+]
+
+[project.optional-dependencies]
+dev = ['pytest>=8', 'pytest-cov>=5', 'ruff>=0.8']
+
+[project.urls]
+Homepage = 'https://github.com/indico/indico'
+
+[project.entry-points.'indico.plugins']
+group_registration = 'indico_group_registration.plugin:GroupRegistrationPlugin'
+
+[tool.hatch.version]
+path = 'indico_group_registration/__init__.py'
+
+[tool.hatch.build]
+include = ['indico_group_registration']
+
+[tool.hatch.build.targets.wheel]
+packages = ['indico_group_registration']
+
+[tool.pytest.ini_options]
+testpaths = ['tests']
+# Indico ships a pytest plugin that pulls in its whole database fixture stack
+# (and needs docker).  The unit tests here do not use it.
+addopts = '-p no:indico'
