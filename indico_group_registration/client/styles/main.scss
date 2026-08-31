@@ -1,8 +1,15 @@
 // Styles for the server-rendered group panel on the registration summary page.
 // The plan picker inside the React form has its own CSS module.
 
+// The panel is one full-width row of the registration summary table, so the
+// cell has to give up the padding and alignment that table's own cells carry.
+.group-registration-row > td {
+  padding: 0 0 1em;
+  vertical-align: top;
+}
+
 .group-registration-panel {
-  margin-bottom: 1em;
+  margin-bottom: 0;
 }
 
 .group-registration-share {

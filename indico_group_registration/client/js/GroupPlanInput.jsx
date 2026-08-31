@@ -129,6 +129,15 @@ export default function GroupPlanInput({
     return () => runLookup.cancel();
   }, [value.mode, value.code, runLookup]);
 
+  // A form with a single group plan leaves nothing to choose, so choosing to
+  // create a group is itself the choice of plan. The guard is what stops this
+  // from fighting a participant who picked one of several plans.
+  useEffect(() => {
+    if (value.mode === MODE_CREATE && !value.plan && groupPlans.length === 1) {
+      update({plan: groupPlans[0].id});
+    }
+  }, [value.mode, value.plan, groupPlans, update]);
+
   // A join link drops the code in the query string; pick it up once.
   const prefilled = useRef(false);
   useEffect(() => {
@@ -153,7 +162,12 @@ export default function GroupPlanInput({
 
   return (
     <div styleName="group-plan" data-mode={value.mode}>
-      <Form.Group grouped>
+      {/*
+        A plain stack rather than `Form.Group grouped`: Indico's own form CSS
+        flattens Semantic's grouped fields onto one line, which runs the three
+        choices together with no space between them.
+      */}
+      <div styleName="modes">
         <Radio
           label={Translate.string('Register individually')}
           checked={value.mode === MODE_NONE}
@@ -172,7 +186,7 @@ export default function GroupPlanInput({
           disabled={disabled}
           onChange={() => update({mode: MODE_JOIN, plan: null, name: '', accepted: false})}
         />
-      </Form.Group>
+      </div>
 
       {value.mode === MODE_CREATE && (
         <div styleName="panel">

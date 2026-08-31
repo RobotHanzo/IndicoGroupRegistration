@@ -1,3 +1,5 @@
+{% from 'message_box.html' import message_box %}
+
 {% macro render_group_panel(membership, group, registration, from_management=false, switchable_plans=()) %}
     {% set plan = group.pricing_plan %}
     {% set chosen = group.chosen_plan %}
@@ -5,6 +7,15 @@
     {% set join_url = url_for_plugin('group_registration.join_link', group.registration_form,
                                      join_uuid=group.join_uuid, _external=true) %}
 
+    {#
+        The hook this macro answers is rendered *inside* `<table class="registration-info">`,
+        before its first row.  Anything that is not table content gets foster-parented
+        out of the table by the HTML parser, and the members table below implicitly
+        closes the outer one -- which tore the panel into three pieces scattered
+        around the page.  One row spanning both columns keeps it whole.
+    #}
+    <tr class="group-registration-row">
+      <td colspan="2">
     <div class="i-box group-registration-panel" data-group-state="{{ group.state.name }}">
         <div class="i-box-header">
             <div class="i-box-title">
@@ -54,12 +65,18 @@
                     {% endif %}
                 </p>
                 {% if membership.balance_due > 0 %}
-                    <div class="i-callout warning">
+                    {# `i-callout` is not an Indico class; this is the one it really has. #}
+                    {% call message_box('warning') %}
                         {% trans balance=format_currency(membership.balance_due, registration.currency) -%}
                             You have an outstanding balance of {{ balance }}. Please contact the organizers to
                             settle it.
                         {%- endtrans %}
-                    </div>
+                        {% trans -%}
+                            Until it is settled your registration stays on "awaiting payment". The checkout cannot
+                            take the difference on its own, so please arrange it with the organizers rather than
+                            paying again here.
+                        {%- endtrans %}
+                    {% endcall %}
                 {% endif %}
             {% elif group.state.name == 'dissolved' %}
                 <p>
@@ -164,4 +181,6 @@
             {% endif %}
         </div>
     </div>
+      </td>
+    </tr>
 {% endmacro %}

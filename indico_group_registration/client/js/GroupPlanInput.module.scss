@@ -4,6 +4,16 @@
   gap: 1em;
 }
 
+.modes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6em;
+
+  label {
+    cursor: pointer;
+  }
+}
+
 .panel {
   display: flex;
   flex-direction: column;
