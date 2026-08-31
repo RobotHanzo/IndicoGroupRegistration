@@ -71,6 +71,8 @@ docstring-quotes = 'double'
 avoid-escape = true
 
 [lint.per-file-ignores]
+# a build helper whose whole job is shelling out to Indico's own build script
+'build-assets.py' = ['S404', 'S603']
 # broad excepts are the whole point in the Sentry hooks
 'indico_sentry/util.py' = ['S110']
 'indico_sentry/hooks.py' = ['S110']

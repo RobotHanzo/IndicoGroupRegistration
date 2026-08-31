@@ -17,22 +17,18 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build distributions
+  check-version:
+    name: Check the tag matches the package version
     runs-on: ubuntu-latest
+    if: github.event_name == 'release'
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-          cache: pip
-
-      - name: Install build tooling
-        run: pip install build twine
 
       - name: Check the tag matches the package version
-        if: github.event_name == 'release'
         run: |
           python - <<'PY'
           import os, pathlib, re, sys
@@ -46,40 +42,16 @@ jobs:
         env:
           TAG: ${{ github.event.release.tag_name }}
 
-      - name: Build sdist and wheel
-        run: python -m build
-
-      - name: Check metadata
-        run: twine check --strict dist/*
-
-      # A plugin whose templates or migrations are missing installs fine and
-      # then fails at runtime, so this is worth blocking a release over.
-      - name: Make sure templates and migrations are in the wheel
-        run: |
-          python - <<'PY'
-          import pathlib, sys, zipfile
-          wheel = next(pathlib.Path('dist').glob('*.whl'))
-          names = zipfile.ZipFile(wheel).namelist()
-          required = [
-              'indico_group_registration/templates/_group_panel.html',
-              'indico_group_registration/templates/settings.html',
-              'indico_group_registration/templates/emails/group_short.txt',
-              ('indico_group_registration/templates/customization/core/events/'
-               'payment/event_checkout.html'),
-          ]
-          missing = [n for n in required if n not in names]
-          if not any(n.startswith('indico_group_registration/migrations/') and n.endswith('.py')
-                     for n in names):
-              missing.append('indico_group_registration/migrations/*.py')
-          if missing:
-              sys.exit(f'missing from {wheel.name}: {missing}')
-          print(f'{wheel.name} looks good')
-          PY
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+  # Builds the webpack bundle against an Indico source checkout and packs it
+  # into the wheel, then blocks the release if anything the plugin needs at
+  # runtime -- assets, templates, migrations -- did not make it in.
+  build:
+    name: Build
+    needs: check-version
+    # `needs` on a job that is skipped for workflow_dispatch would skip this one
+    # too, so only an actual failure may stop it.
+    if: ${{ !cancelled() && !failure() }}
+    uses: ./.github/workflows/build.yml
 
   publish-testpypi:
     name: Publish to TestPyPI

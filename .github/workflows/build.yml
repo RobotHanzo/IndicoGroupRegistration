@@ -1,0 +1,100 @@
+name: Build
+
+# Building this plugin means building its webpack bundle first.  Indico
+# compiles plugin assets with its own webpack setup, and none of what that
+# needs -- `bin/maintenance/`, `webpack/`, `plugin.webpack.config.mjs`,
+# `node_modules/` -- ships in the Indico wheel, so the build wants an Indico
+# *source* checkout.  Doing it here means the published wheel carries the built
+# bundle and nobody has to reproduce any of this on a server.
+on:
+  workflow_call:
+    inputs:
+      indico-version:
+        description: The Indico release whose source builds the assets.
+        type: string
+        default: '3.3.13'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '22.x'
+  # `dump_url_map.py` spins up a throwaway Flask app to resolve the
+  # `indico-url:` imports in the plugin's JS.  /dev/null gives it Indico's
+  # defaults, which is all it needs -- there is no database in reach here.
+  INDICO_CONFIG: /dev/null
+
+jobs:
+  build:
+    name: Build distributions
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Check out the plugin
+        uses: actions/checkout@v4
+        with:
+          path: plugin
+
+      - name: Check out Indico ${{ inputs.indico-version }}
+        uses: actions/checkout@v4
+        with:
+          repository: indico/indico
+          ref: v${{ inputs.indico-version }}
+          path: indico
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: indico/package-lock.json
+
+      # Indico depends on psycopg2 (not psycopg2-binary), which is built from
+      # source and needs the PostgreSQL client headers.
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libpq-dev
+
+      # The `dev` extra is what carries the build tooling `build-assets.py`
+      # imports (click, PyYAML, flask-url-map-serializer).
+      - name: Install Indico from source
+        run: pip install -e './indico[dev]'
+
+      - name: Install node dependencies
+        working-directory: indico
+        run: npm ci
+
+      # `dump_url_map.py` builds the URL map from the plugin's own blueprint, so
+      # the plugin has to be importable under its `indico.plugins` entry point.
+      # `--no-deps` keeps pip from replacing the editable Indico just installed
+      # with a PyPI build.
+      - name: Install the plugin
+        run: pip install --no-deps -e ./plugin
+
+      - name: Build the assets
+        run: python indico/bin/maintenance/build-assets.py plugin --clean "$GITHUB_WORKSPACE/plugin"
+
+      - name: Install build tooling
+        run: pip install build twine
+
+      - name: Build sdist and wheel
+        working-directory: plugin
+        run: python -m build
+
+      - name: Check metadata
+        working-directory: plugin
+        run: twine check --strict dist/*
+
+      - name: Check the wheel contents
+        working-directory: plugin
+        run: python .github/scripts/check_wheel.py dist
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: plugin/dist/

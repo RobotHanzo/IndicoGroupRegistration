@@ -89,51 +89,8 @@ jobs:
           path: coverage.xml
           if-no-files-found: ignore
 
+  # The bundle build needs an Indico source checkout and node, so it lives in
+  # its own reusable workflow -- the release pipeline calls the same one.
   build:
-    name: Build distributions
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-          cache: pip
-
-      - name: Install build tooling
-        run: pip install build twine
-
-      - name: Build sdist and wheel
-        run: python -m build
-
-      - name: Check metadata
-        run: twine check --strict dist/*
-
-      - name: Make sure templates and migrations are in the wheel
-        run: |
-          python - <<'PY'
-          import pathlib, zipfile, sys
-          wheel = next(pathlib.Path('dist').glob('*.whl'))
-          names = zipfile.ZipFile(wheel).namelist()
-          required = [
-              'indico_group_registration/templates/_group_panel.html',
-              'indico_group_registration/templates/settings.html',
-              'indico_group_registration/templates/emails/group_short.txt',
-              ('indico_group_registration/templates/customization/core/events/'
-               'payment/event_checkout.html'),
-          ]
-          missing = [n for n in required if n not in names]
-          # Migration filenames carry a date prefix, so match on the directory.
-          if not any(n.startswith('indico_group_registration/migrations/') and n.endswith('.py')
-                     for n in names):
-              missing.append('indico_group_registration/migrations/*.py')
-          if missing:
-              sys.exit(f'missing from {wheel.name}: {missing}')
-          print(f'{wheel.name} looks good')
-          PY
-
-      - name: Upload distributions
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist
-          path: dist/
+    name: Build
+    uses: ./.github/workflows/build.yml

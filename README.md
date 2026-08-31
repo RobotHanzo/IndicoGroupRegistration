@@ -112,14 +112,36 @@ indico db alembic current   # should match
 indico db alembic heads
 ```
 
-Build the assets:
-
-```bash
-python bin/maintenance/build-assets.py plugin /path/to/IndicoGroupRegistration
-```
-
 Restart Indico and its Celery workers — the reconciliation task runs every
 fifteen minutes from the Celery beat schedule.
+
+That is the whole install. The wheel ships the compiled webpack bundle, so
+there is no asset build to run on the server — which is just as well, since
+building one needs node and an Indico *source* checkout, and a pip-installed
+Indico has neither.
+
+### If registration pages throw `Assets for plugin group_registration have not been built`
+
+Indico could not find `static/dist/manifest.json` next to the installed plugin,
+so it refuses to render any page the plugin puts a script on — which is every
+registration page in the instance, management side included.
+
+Check what got installed:
+
+```bash
+ls /opt/indico/.venv/lib/python3.12/site-packages/indico_group_registration/static/dist/
+```
+
+If that directory is missing or empty, the plugin was installed from a source
+checkout, or from a wheel built before the assets were packaged. Reinstall from
+PyPI:
+
+```bash
+/opt/indico/.venv/bin/pip install --no-deps --force-reinstall indico-plugin-group-registration
+```
+
+and restart Indico. If you are deliberately running from a git checkout, build
+the bundle yourself — see [Building the assets](#building-the-assets).
 
 ### If the site is throwing `UndefinedColumn` errors
 
@@ -170,6 +192,31 @@ ruff check .
 
 The tests here are unit tests over the money arithmetic and the code handling;
 they do not need a database or Indico's pytest plugin.
+
+### Building the assets
+
+The plan picker is a React component compiled by Indico's own webpack setup,
+which means the build needs an Indico source checkout at the version the plugin
+will run against — `bin/maintenance/`, `webpack/` and `node_modules/` are not
+in the Indico wheel.
+
+```bash
+git clone --branch v3.3.13 https://github.com/indico/indico ~/dev/indico
+cd ~/dev/indico && npm ci && cd -
+
+/opt/indico/.venv/bin/python build-assets.py --indico-source ~/dev/indico
+```
+
+Run it with the Python that Indico and this plugin are installed into: the
+build imports the plugin to resolve its own URL rules. The result lands in
+`indico_group_registration/static/dist/`, which is git-ignored and shipped as a
+packaging artifact. `--dev` and `--watch` are passed straight through to
+Indico's build script.
+
+Releases do all of this in CI — see
+[.github/workflows/build.yml](.github/workflows/build.yml), which builds the
+bundle, packs it into the wheel and refuses to publish a wheel that is missing
+its assets, templates or migrations.
 
 ## How it hooks into Indico
 

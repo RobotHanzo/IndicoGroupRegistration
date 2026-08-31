@@ -39,9 +39,24 @@ path = 'indico_group_registration/__init__.py'
 
 [tool.hatch.build]
 include = ['indico_group_registration']
+# The webpack bundle under `static/dist/` is a build artifact, so git ignores it
+# -- and hatchling follows .gitignore, which would leave it out of the sdist and
+# the wheel.  `artifacts` is the override.  Without it, every install is missing
+# `static/dist/manifest.json` and Indico raises `Assets for plugin
+# group_registration have not been built` on every page the plugin injects a
+# bundle into, which is most of the registration module.
+artifacts = ['indico_group_registration/static/dist/']
+
+[tool.hatch.build.targets.sdist]
+# The sdist has to stay buildable on its own, so it keeps the JS sources and the
+# bundle definition webpack reads.
+include = ['indico_group_registration', 'tests', 'webpack-bundles.json', 'build-assets.py', 'ruff.toml']
 
 [tool.hatch.build.targets.wheel]
 packages = ['indico_group_registration']
+# The compiled bundle is what runs; the sources it was built from live in git
+# and in the sdist, and webpack already inlines them into the source maps.
+exclude = ['indico_group_registration/client/']
 
 [tool.pytest.ini_options]
 testpaths = ['tests']
