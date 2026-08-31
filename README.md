@@ -72,9 +72,24 @@ confirmed, group short with the new rate, and group dissolved.
 
 ## Installation
 
-```bash
-pip install indico-plugin-group-registration
-```
+> **Do not let pip upgrade Indico by accident.** This plugin declares
+> `indico>=3.3,<3.4`, and pip will happily *upgrade* an installed Indico to
+> satisfy that. An Indico whose code is newer than its database fails on every
+> page that touches a migrated table — the whole site, not just registration.
+> Install into the existing Indico virtualenv and check what pip says it is
+> about to do:
+>
+> ```bash
+> /opt/indico/.venv/bin/pip install indico-plugin-group-registration
+> ```
+>
+> If Indico appears in the "Installing collected packages" line, **run the core
+> migrations before restarting** (see below). To keep pip away from Indico
+> entirely:
+>
+> ```bash
+> /opt/indico/.venv/bin/pip install --no-deps indico-plugin-group-registration
+> ```
 
 Add it to `indico.conf`:
 
@@ -82,16 +97,44 @@ Add it to `indico.conf`:
 PLUGINS = {'group_registration'}
 ```
 
-Then create the tables and build the assets:
+Then migrate. **`--all-plugins` runs core migrations too, which is what you
+want** — if pip moved Indico forward, this is the step that moves the database
+with it:
 
 ```bash
 indico db --all-plugins upgrade
-indico setup create-symlinks --help   # if you serve plugin static files
+```
+
+Sanity-check that nothing is pending:
+
+```bash
+indico db alembic current   # should match
+indico db alembic heads
+```
+
+Build the assets:
+
+```bash
 python bin/maintenance/build-assets.py plugin /path/to/IndicoGroupRegistration
 ```
 
 Restart Indico and its Celery workers — the reconciliation task runs every
 fifteen minutes from the Celery beat schedule.
+
+### If the site is throwing `UndefinedColumn` errors
+
+Indico's code is ahead of its database. Nothing to do with this plugin's
+tables; run the migrations:
+
+```bash
+indico db --all-plugins upgrade
+```
+
+Or put Indico back where it was and migrate later:
+
+```bash
+/opt/indico/.venv/bin/pip install 'indico==<your previous version>'
+```
 
 ## Configuration
 

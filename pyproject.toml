@@ -17,7 +17,12 @@ classifiers = [
 requires-python = '>=3.12.2, <3.13'
 dynamic = ['version']
 dependencies = [
-    'indico>=3.3',
+    # Upper bound on purpose. pip is allowed to *upgrade* Indico to satisfy
+    # this, and an Indico whose code is ahead of its database breaks every page
+    # that touches a migrated table -- so the range is capped at the series
+    # this plugin is tested against. Install with `--no-deps` into an existing
+    # Indico venv if you would rather pip did not touch Indico at all.
+    'indico>=3.3,<3.4',
 ]
 
 [project.optional-dependencies]
