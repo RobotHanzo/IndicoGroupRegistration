@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 from werkzeug.exceptions import NotFound
 
 from indico.core.db import db
-from indico.core.plugins import url_for_plugin
+from indico.core.plugins import WPJinjaMixinPlugin, url_for_plugin
 from indico.modules.events.registration.controllers.management import RHManageRegFormBase, RHManageRegFormsBase
 from indico.modules.events.registration.models.forms import RegistrationForm
 from indico.modules.events.registration.views import WPManageRegistration
@@ -37,11 +37,16 @@ DEFAULT_DISCLAIMER = _(
 )
 
 
-class WPGroupRegistration(WPManageRegistration):
+class WPGroupRegistration(WPJinjaMixinPlugin, WPManageRegistration):
     """Renders our management pages inside the registration management area.
 
-    Plugins live in their own template namespace, so templates are addressed as
-    ``group_registration:<name>`` rather than through ``template_prefix``.
+    ``WPJinjaMixinPlugin`` has to come first.  ``WPManageRegistration`` sets
+    ``template_prefix = 'events/registration/'`` for core templates, and that
+    prefix is prepended verbatim -- turning ``group_registration:overview.html``
+    into ``events/registration/group_registration:overview.html``, which exists
+    nowhere.  Listing the mixin first clears the prefix and swaps in the plugin
+    template loader, so ``group_registration:<name>`` resolves to this plugin's
+    ``templates/`` directory.
     """
 
     sidemenu_option = 'group_registration'
