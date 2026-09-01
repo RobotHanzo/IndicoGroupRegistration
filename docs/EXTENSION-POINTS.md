@@ -137,7 +137,7 @@ small, stable templates, and it should be pinned to a tested version range.
 | --- | --- |
 | `regformBeforeSections` / `regformAfterSections` | `form_submission/RegistrationFormSubmission.jsx:207,211` |
 | `regformFormDecorators` | `RegistrationFormSubmission.jsx:198` — final-form decorators, i.e. react to field changes live |
-| `regformCustomFields` | `form/fields/registry.js:269` — **names must start with `ext__`** unless `unsafeOverrideField` is set |
+| `regformCustomFields` | `form/fields/registry.js:269` — **names must start with `ext__`** unless `unsafeOverrideField` is set. **Register every type the server can provision, internal ones included**: `form/fields/ShowIfInput.jsx:29` reads `fieldRegistry[inputType].showIfOptions` for every item on the form with no guard, so an unregistered type throws and unmounts the whole form editor |
 | `regform-{inputType}-field-item` | `form/FormItem.jsx:244` |
 | `regform-{inputType}-field-settings` | `form_setup/ItemSettingsModal.jsx:160` |
 
