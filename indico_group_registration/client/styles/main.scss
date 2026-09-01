@@ -81,3 +81,23 @@
     min-width: 12em;
   }
 }
+
+// The internal group discount field.
+//
+// The field exists to carry a named line onto the invoice, and its section
+// exists to keep that field off the participant's form. Neither is anything an
+// organizer can act on, so neither is shown: before this they met the field as
+// `Unknown input type` in the form editor, and registering it with core's
+// registry alone would only have turned that into an empty box.
+//
+// The marker is rendered by the field's own input component, so this matches
+// the section the plugin provisioned and nothing else. `:has()` is how core's
+// own stylesheet hides a section whose items have all gone away.
+
+[data-group-registration-internal-field] {
+  display: none !important;
+}
+
+.regform-section:has([data-group-registration-internal-field]) {
+  display: none;
+}

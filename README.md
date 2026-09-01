@@ -162,6 +162,32 @@ PyPI:
 and restart Indico. If you are deliberately running from a git checkout, build
 the bundle yourself — see [Building the assets](#building-the-assets).
 
+### If the registration form editor goes blank
+
+Symptom: **Registration → Registration form**, click the gear on any field, and
+the page empties. The browser console has
+`TypeError: undefined is not an object (evaluating '…showIfOptions')` from
+`form/fields/ShowIfInput.jsx`.
+
+Core builds the "show this field if" dropdown by looking every item on the form
+up in its React field registry, without checking the type is there — so one
+plugin field the browser does not know about throws and unmounts the whole
+editor. That was this plugin's `ext__group_discount` before 0.2.2, and it is
+worth knowing the shape of it: any plugin that provisions a field type it never
+registers client-side breaks the editor for every field on the form, not just
+its own.
+
+Upgrade the plugin and hard-reload the page:
+
+```bash
+/opt/indico/.venv/bin/pip install --no-deps -U indico-plugin-group-registration
+```
+
+If it still happens, the culprit is another plugin's field. The console error
+does not name the input type; the form editor prints
+`Unknown input type: <name>` in place of the offending field, so look for that
+before opening the dialog.
+
 ### If the site is throwing `UndefinedColumn` errors
 
 Indico's code is ahead of its database. Nothing to do with this plugin's
@@ -199,7 +225,9 @@ Enabling group registration provisions two fields on the form:
   wherever you like in the form.
 - **`ext__group_discount`** — a manager-only field carrying the discount. It is
   locked, written only by the plugin, and appears as a named line on the
-  invoice. Leave it alone; the plugin puts it back if it is removed.
+  invoice. You will not see it in the form editor: it is registered with core's
+  React field registry so that it can render nothing at all, and its section is
+  hidden. Nothing about it is an organizer's to set.
 
 ## Development
 
@@ -249,7 +277,9 @@ version:
 - `is_field_data_locked` to keep core out of the plugin's own field
 - `registrant_list_items` for the Group column
 - `before-render-registration-info` for the group panel
-- the React field registry via `regformCustomFields`
+- the React field registry via `regformCustomFields` — **both** field types,
+  the internal one included; core's form editor crashes on an input type that is
+  not in the registry
 - `get_template_customization_paths` to name the discount on the checkout page,
   using `{% extends '~...' %}` so it inherits the core template rather than
   forking it
