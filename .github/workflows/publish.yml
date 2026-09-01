@@ -56,7 +56,13 @@ jobs:
   publish-testpypi:
     name: Publish to TestPyPI
     needs: build
-    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    # `check-version` only runs for a release, so a manual dispatch skips it --
+    # and a skip propagates down the whole `needs` graph unless a condition
+    # overrides it. `build` overrides it; without the same override here, a
+    # dispatch built a distribution and then published nothing at all, silently
+    # and with a green tick. The guard is not lost: a `check-version` that
+    # *fails* makes `failure()` true, which skips this job as it should.
+    if: ${{ !cancelled() && !failure() && github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi' }}
     runs-on: ubuntu-latest
     environment:
       name: testpypi
@@ -81,7 +87,10 @@ jobs:
   publish-pypi:
     name: Publish to PyPI
     needs: build
-    if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')
+    # See `publish-testpypi` for why `!cancelled() && !failure()` is here.
+    if: ${{ !cancelled() && !failure()
+        && (github.event_name == 'release'
+            || (github.event_name == 'workflow_dispatch' && inputs.target == 'pypi')) }}
     runs-on: ubuntu-latest
     environment:
       name: pypi
