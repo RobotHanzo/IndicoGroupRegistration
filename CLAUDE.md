@@ -125,6 +125,12 @@ Layered so the lower half never imports the upper half:
 - **Custom regform field names must start with `ext__`**; core's frontend
   registry rejects anything else. The names live in `constants.py` and are
   repeated in `client/js/index.jsx`.
+- **The internal discount field is hidden in three separate places**, because
+  core exposes every field on a form in three: the form editor (the React
+  component draws only the marker `client/styles/main.scss` hides its section
+  by), the participant's form (the section is manager-only), and the registrant
+  list's *Customize list* dialog (`reglist.hide_internal_columns`). Anything
+  that adds a fourth internal field has to do all three.
 - The plugin **never sends an invitation or any e-mail a participant can
   trigger**. Only group-state changes mail: confirmed, short, dissolved. Keep it
   that way — a participant-facing endpoint that mails a stranger is the thing
@@ -134,7 +140,14 @@ Layered so the lower half never imports the upper half:
 
 `templates/customization/core/events/payment/event_checkout.html`, served via
 `get_template_customization_paths`, and it `{% extends '~...' %}` so it inherits
-rather than copies. Do not add more: a fork drifts on every Indico upgrade.
+rather than copies. Do not add more: a fork drifts on every Indico upgrade, and
+a customization path replaces a core template *wholesale* — two plugins wanting
+the same file is a silent contest one of them loses.
+
+That last point is why `reglist.py` filters the *Customize list* dialog through
+Flask's own `before_render_template` rather than forking
+`management/reglist_filter.html`: the STSA plugin has the same internal field
+and the same need, and receivers compose where template overrides do not.
 
 ## Style
 

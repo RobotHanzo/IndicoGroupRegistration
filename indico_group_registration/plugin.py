@@ -3,7 +3,7 @@
 from importlib import import_module
 from pathlib import Path
 
-from flask import session
+from flask import before_render_template, session
 
 from indico.core import signals
 from indico.core.plugins import IndicoPlugin, get_plugin_template_module, url_for_plugin
@@ -18,7 +18,7 @@ from indico_group_registration.fields import GroupDiscountField, GroupPlanField
 from indico_group_registration.handlers import (get_locked_field_reason, handle_registration_created,
                                                 handle_registration_deleted, handle_registration_state_updated,
                                                 handle_registration_updated)
-from indico_group_registration.reglist import GroupListItem
+from indico_group_registration.reglist import REGLIST_FILTER_TEMPLATE, GroupListItem, hide_internal_columns
 from indico_group_registration.util import get_switchable_plans, is_enabled
 
 
@@ -55,6 +55,12 @@ class GroupRegistrationPlugin(IndicoPlugin):
         # Management UI.
         self.connect(signals.event.registrant_list_items, self._registrant_list_items)
         self.connect(signals.menu.items, self._sidemenu_items, sender='event-management-sidemenu')
+
+        # The "Customize list" dialog builds its column list from the form
+        # itself and core has no hook for leaving a field out, so the internal
+        # discount field is filtered out of the template's context instead.
+        # See `reglist.hide_internal_columns` for why that is Flask's signal.
+        self.connect(before_render_template, self._before_render_template)
 
         # Participant and management page fragments.
         self.template_hook('before-render-registration-info', self._inject_group_panel)
@@ -112,6 +118,21 @@ class GroupRegistrationPlugin(IndicoPlugin):
         return SideMenuItem('group_registration', _('Group registration'),
                             url_for_plugin('group_registration.manage_overview', event),
                             section='organization', weight=-10)
+
+    def _before_render_template(self, sender, template=None, context=None, **kwargs):
+        """Filter the registrant-list column dialog just before it renders.
+
+        This receiver sees *every* template in the instance, so it does as
+        little as possible before recognising its own, and it swallows whatever
+        goes wrong: a column an organizer should not have been offered is worth
+        far less than the page it is on.
+        """
+        if context is None or getattr(template, 'name', None) != REGLIST_FILTER_TEMPLATE:
+            return
+        try:
+            hide_internal_columns(context)
+        except Exception:
+            self.logger.exception('Could not filter the registration list column dialog')
 
     def _import_tasks(self, sender, **kwargs):
         # Imported for its side effect: the module body is what registers the

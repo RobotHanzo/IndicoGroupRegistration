@@ -121,6 +121,40 @@ replaces that core template wholesale.
 Powerful, and a fork: the copy drifts on every Indico upgrade. Worth it only for
 small, stable templates, and it should be pinned to a tested version range.
 
+It is also **exclusive**. `setup_jinja_customization` appends every path the
+signal yields to one search path, so the first plugin with a copy of a given
+core template wins and the others are silently ignored. Two plugins that need
+the same file changed cannot both use this.
+
+### Filtering a template's context instead: `before_render_template`
+
+Flask's own signal (`flask/templating.py`, sent from `_render`) hands receivers
+the `template` and the `context` **dict** immediately before it is rendered, and
+mutating that dict takes effect. Where core builds something out of the model
+with no hook of its own, this reaches it without a fork — and unlike a
+customization path, several plugins can each filter the same context, since each
+only wraps what the last one left.
+
+The case here is the *Customize list* dialog
+(`management/reglist_filter.html:102`):
+
+```jinja
+{% for section in regform.sections if section.is_visible and section.available_fields %}
+```
+
+Every field on the form is offered as a column an organizer can switch on,
+manager-only sections included, and `RegistrationFormSection.available_fields`
+(`models/items.py:485`) exists for that template and nothing else — there is no
+signal, no interceptable function and no `template_hook` anywhere in the file.
+`reglist.hide_internal_columns` therefore swaps `regform` for a proxy whose
+sections do not report the plugin's internal discount field, and the template's
+own `if section.available_fields` then drops the emptied section.
+
+The same receiver drops the field's id from `visible_items`, because
+`#list-filter-select-all` (`util/list_generator.js:172`) clicks every
+`.visibility:not(.enabled)` in the dialog whether it is displayed or not — so a
+column merely *hidden* could still be switched on and then never switched off.
+
 ### Menus, blueprints, models
 
 - `signals.menu.items` via `'event-management-sidemenu'` for a management page.

@@ -227,7 +227,9 @@ Enabling group registration provisions two fields on the form:
   locked, written only by the plugin, and appears as a named line on the
   invoice. You will not see it in the form editor: it is registered with core's
   React field registry so that it can render nothing at all, and its section is
-  hidden. Nothing about it is an organizer's to set.
+  hidden. It is not offered as a column in the registration list's **Customize
+  list** dialog either — the **Group** column is the one that belongs to you.
+  Nothing about it is an organizer's to set.
 
 ## Development
 
@@ -276,6 +278,9 @@ version:
   and `registration_state_updated`
 - `is_field_data_locked` to keep core out of the plugin's own field
 - `registrant_list_items` for the Group column
+- Flask's `before_render_template` for the one thing Indico has no hook for:
+  keeping the internal discount field out of the **Customize list** dialog,
+  which otherwise offers every field on the form as a column
 - `before-render-registration-info` for the group panel
 - the React field registry via `regformCustomFields` — **both** field types,
   the internal one included; core's form editor crashes on an input type that is
