@@ -32,6 +32,27 @@ reordering a plan never detaches the groups already formed under it.
 The seat count is both the **target and the cap**: filling it confirms the
 group, and the group is then full.
 
+### When another plugin discounts the same registration
+
+The plan picker quotes a price per member, and it has to be the price that
+member will really be charged — it is the number somebody decides to register
+on. So the picker is given two fees rather than one, in the `ext__group_plan`
+field's data:
+
+| | |
+| --- | --- |
+| `basePrice` | the form's standard registration fee |
+| `payerBasePrice` | what *this* person pays before a group plan is applied |
+
+They are the same number until another plugin takes something off the
+registration first — the [STSA plugin](https://github.com/RobotHanzo/IndicoSTSA)'s
+member discount is the case this exists for — and such a plugin overwrites
+`payerBasePrice` only. Which fee a plan's own rate is worked out from is the
+**Discount applies to** setting, read in the browser exactly as `pricing.py`
+reads it on the server: against the registration fee it is `basePrice`, so two
+discounts do not compound; against the whole price it is what the other discount
+left behind. Leaving `basePrice` alone is what keeps those two answers the same.
+
 ### Lifecycle
 
 | State | What it means |

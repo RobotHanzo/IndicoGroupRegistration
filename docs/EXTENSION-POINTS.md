@@ -187,6 +187,14 @@ Unknown `data-*` attributes on the regform root are collected into
 So `regform-container-attrs` (server) → `extraData` (client) is the sanctioned
 way to feed plugin data into the participant-facing form.
 
+A field's own `view_data` is the other direction into a plugin's React
+component, and `get_flat_section_submission_data`
+(`registration/util.py:178`) — which assembles it for the whole form — is
+`@make_interceptable`, so *another* plugin can adjust what a field is rendered
+with. That is how the STSA member discount re-quotes this plugin's plan picker:
+it writes `payerBasePrice` and leaves `basePrice` alone. Anything this plugin
+puts in `view_data` is therefore a contract, not an implementation detail.
+
 Plugin assets build with `indico build-assets.py plugin <dir>`, driven by a
 `webpack-bundles.json` at the plugin root, and are injected with
 `IndicoPlugin.inject_bundle()` (`core/plugins/__init__.py:181`).

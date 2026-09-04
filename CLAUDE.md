@@ -90,6 +90,14 @@ Layered so the lower half never imports the upper half:
 - **`target_size` and `plan_id` are copied onto the group at creation**, and plan
   ids are opaque generated keys (`forms._new_plan_id`). Renaming, repricing or
   reordering a plan must never retarget a group already forming under it.
+- **The plan picker is given two fees, and only one of them is this plugin's.**
+  `basePrice` is the form's standard fee and `payerBasePrice` is what the person
+  filling the form in pays before a group plan; a plugin that discounts the same
+  registration (the STSA member discount) overwrites the second. `planPrice` in
+  `GroupPlanInput.jsx` works the plan's rate out from whichever the `applies_to`
+  setting names — the same choice `pricing.compute_discount` makes on the server
+  — so pricing a percentage plan off the discounted fee when `applies_to` is
+  `base` would quietly compound two discounts the server keeps separate.
 - **`calculate_price` cannot see the registration.** Core hands the field impl
   only the stored value and versioned data, so the amount has to be *written
   into* `ext__group_discount`'s value beforehand and read back. The `render_*`

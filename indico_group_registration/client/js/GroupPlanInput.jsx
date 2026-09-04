@@ -35,13 +35,30 @@ function formatMoney(amount, currency) {
   }
 }
 
-/** What one member pays under a plan, given the standard fee. */
-function planPrice(plan, basePrice) {
+/**
+ * What one member pays under a plan.
+ *
+ * Two fees, because they can differ: `basePrice` is the form's standard
+ * registration fee, and `payerBasePrice` is what this particular person pays
+ * before a group plan is applied -- less than the fee when another plugin has
+ * already taken something off, which is the STSA member discount's case.  Which
+ * of the two the plan's own rate is worked out from is the organizer's
+ * `applies_to` setting, read exactly as `pricing.compute_discount` reads it on
+ * the server: against the fee it is the standard fee, so two discounts do not
+ * compound; against the total it is what the other discount left behind.
+ *
+ * Getting that right here is the difference between a quote and a guess -- the
+ * price a group plan shows is the one somebody decides to register on.
+ */
+function planPrice(plan, basePrice, payerBasePrice, appliesTo) {
   if (!plan || !plan.type || !plan.value) {
-    return basePrice;
+    return payerBasePrice;
   }
-  const discount = plan.type === 'percent' ? (basePrice * plan.value) / 100 : plan.value;
-  return Math.max(basePrice - Math.min(discount, basePrice), 0);
+  const rateBase = appliesTo === 'total' ? payerBasePrice : basePrice;
+  const discount = plan.type === 'percent' ? (rateBase * plan.value) / 100 : plan.value;
+  // Clamped to what the rate applies to, like `plans.discount_for`, and then to
+  // zero, like Indico's own total.
+  return Math.max(payerBasePrice - Math.min(discount, rateBase), 0);
 }
 
 /** The code as it is shown: two halves, because people retype it. */
@@ -57,6 +74,8 @@ export default function GroupPlanInput({
   plans,
   currency,
   basePrice,
+  payerBasePrice,
+  appliesTo,
   disclaimer,
   allowEarlyPayment,
   enabled,
@@ -64,6 +83,11 @@ export default function GroupPlanInput({
   const {input} = useField(htmlName, {allowNull: true});
   const value = input.value || EMPTY;
   const groupPlans = useMemo(() => plans.filter(p => p.size > 1), [plans]);
+  // A plugin that discounts the registration overwrites `payerBasePrice`; a
+  // server that does not send it at all means nobody has, and the standard fee
+  // is what this person pays.
+  const payerBase = payerBasePrice ?? basePrice;
+  const memberPrice = plan => planPrice(plan, basePrice, payerBase, appliesTo);
 
   const [lookup, setLookup] = useState({state: 'idle'});
   const lookupSeq = useRef(0);
@@ -205,7 +229,7 @@ export default function GroupPlanInput({
                   </Translate>
                 </span>
                 <span styleName="plan-price">
-                  {formatMoney(planPrice(plan, basePrice), currency)}
+                  {formatMoney(memberPrice(plan), currency)}
                   <small>
                     <Translate>each</Translate>
                   </small>
@@ -275,7 +299,7 @@ export default function GroupPlanInput({
                   <Param name="target" value={lookup.group.target} /> members ·{' '}
                   <Param
                     name="price"
-                    value={formatMoney(planPrice(lookup.group.plan, basePrice), currency)}
+                    value={formatMoney(memberPrice(lookup.group.plan), currency)}
                   />{' '}
                   for you
                 </Translate>
@@ -315,6 +339,8 @@ GroupPlanInput.propTypes = {
   plans: PropTypes.array,
   currency: PropTypes.string.isRequired,
   basePrice: PropTypes.number,
+  payerBasePrice: PropTypes.number,
+  appliesTo: PropTypes.oneOf(['base', 'total']),
   disclaimer: PropTypes.string,
   allowEarlyPayment: PropTypes.bool,
   enabled: PropTypes.bool,
@@ -324,6 +350,8 @@ GroupPlanInput.defaultProps = {
   disabled: false,
   plans: [],
   basePrice: 0,
+  payerBasePrice: null,
+  appliesTo: 'base',
   disclaimer: '',
   allowEarlyPayment: true,
   enabled: false,

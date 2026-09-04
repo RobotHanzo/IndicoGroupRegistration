@@ -21,7 +21,7 @@ from indico.util.i18n import _
 
 from indico_group_registration.constants import (MAX_GROUP_NAME_LENGTH, MODE_CREATE, MODE_JOIN, MODE_NONE, MODES,
                                                  PLAN_FIELD, DISCOUNT_FIELD)
-from indico_group_registration.plans import get_plan
+from indico_group_registration.plans import APPLIES_TO_BASE, get_plan
 
 
 def _decimal(value):
@@ -77,6 +77,16 @@ class GroupPlanField(RegistrationFormFieldBase):
             plans=[plan.serialize() for plan in plans],
             currency=regform.currency,
             base_price=float(regform.base_price),
+            # What *this* person pays before a group plan is applied to it.
+            # The same as the fee, unless another plugin has already taken
+            # something off -- which is what a plugin that does so overwrites,
+            # so that the picker quotes what its owner will really be charged.
+            # `base_price` stays the standard fee, because that is what a plan's
+            # own rate is worked out from when the discount applies to the fee.
+            payer_base_price=float(regform.base_price),
+            # Which of the two the plan's rate is worked out from, exactly as
+            # `pricing.compute_discount` decides it on the server.
+            applies_to=(settings.applies_to if settings else APPLIES_TO_BASE),
             disclaimer=(settings.disclaimer_text if settings else ''),
             allow_early_payment=(settings.allow_early_payment if settings else True),
         )
