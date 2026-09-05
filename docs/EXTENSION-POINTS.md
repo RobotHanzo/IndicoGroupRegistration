@@ -183,6 +183,16 @@ Two things do not come for free:
   `getSelectedRows()[0]` in core's JS, and nothing is selected when the
   recipients were found rather than picked. A second subclass that returns the
   first recipient is less work than shipping JavaScript to fix it.
+- **The *Preview email* button's handler is not global.** Core binds
+  `#preview-email` inside `setupRegistrationList()` (`reglists.js:39`), which is
+  called from `management/regform_reglist.html:257` and nowhere else — so a
+  dialog opened from any other page gets a button with nothing behind it.
+  `setupActionLinks` (`declarative.js:101`) *is* bound on every page, and
+  `data-ajax-dialog` + `data-params-selector` reproduce the whole thing
+  declaratively: given a JSON object, `getParamsFromSelectors`
+  (`declarative.js:25`) posts `$(selector).val()` per key, read at click time.
+  That object form arrived in **3.3.5**; before it the attribute was treated as
+  a bare CSS selector and nothing was sent.
 
 ### Per-recipient figures: `signals.core.get_placeholders`
 

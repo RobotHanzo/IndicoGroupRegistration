@@ -156,6 +156,13 @@ Layered so the lower half never imports the upper half:
   `BuildError` from a plugin blueprint. Recipients are found, never read off the
   request — `_ReminderMixin` skips the `use_kwargs` `_process_args` that would
   trust a posted id list.
+- **The preview button cannot be core's.** Core binds `#preview-email` inside
+  `setupRegistrationList()`, which runs from the registrant list template alone
+  — on the Groups page that handler does not exist, so borrowing the id gives a
+  button that does nothing. It is declarative instead (`data-ajax-dialog` plus
+  `data-params-selector`, both bound on every page), and the object form of
+  `data-params-selector` is why `pyproject.toml` floors Indico at **3.3.5**
+  rather than 3.3. `tests/test_views.py` pins the attributes.
 - **`plugin._get_email_placeholders` must answer the same way for a given form
   every time.** The dialog *describes* the placeholders on one call and
   *replaces* them on another, so a name offered by the first and missing from

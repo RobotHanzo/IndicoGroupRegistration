@@ -147,7 +147,7 @@ quietly rebill somebody who has already handed money over.
 ## Installation
 
 > **Do not let pip upgrade Indico by accident.** This plugin declares
-> `indico>=3.3,<3.4`, and pip will happily *upgrade* an installed Indico to
+> `indico>=3.3.5,<3.4`, and pip will happily *upgrade* an installed Indico to
 > satisfy that. An Indico whose code is newer than its database fails on every
 > page that touches a migrated table — the whole site, not just registration.
 > Install into the existing Indico virtualenv and check what pip says it is

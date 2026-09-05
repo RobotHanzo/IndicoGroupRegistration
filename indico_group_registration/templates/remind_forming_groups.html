@@ -6,8 +6,14 @@
    whichever blueprint is handling the request -- so rendering it from this
    plugin's blueprint asks Flask for
    `plugin_group_registration.email_registrants_preview` and raises
-   `BuildError`.  The preview button keeps core's `preview-email` id, because
-   core's own delegated click handler is what drives it.
+   `BuildError`.
+
+   The preview button is **not** core's. Core binds `#preview-email` inside
+   `setupRegistrationList()` (`registration/client/js/reglists.js:39`), and that
+   function is called from one template only --
+   `management/regform_reglist.html:257`, the registrant list. This dialog opens
+   from the Groups page, where it has never run, so borrowing core's id gave a
+   button with no handler behind it at all. See the note on the button itself.
 #}
 
 {% from 'forms/_form.html' import form_header, form_rows, form_footer %}
@@ -47,8 +53,39 @@
     {{ form_rows(form) }}
     {% call form_footer(form) %}
         <input type="submit" class="i-button highlight big" value="{% trans %}Send{% endtrans %}">
-        <input id="preview-email" class="i-button big" type="button" value="{%- trans %}Preview email{% endtrans -%}"
-               data-href="{{ url_for_plugin('group_registration.remind_forming_groups_preview', regform) }}">
+        {#
+            Declarative rather than core's `#preview-email`, and deliberately
+            without that id: `setupActionLinks` in
+            `jquery/utils/declarative.js:101` binds
+            `input:button[data-href][data-ajax-dialog]` on `body` at
+            `$(document).ready` on *every* page, which is the same handler that
+            opens this dialog from the Groups page. So it is there whether or
+            not the registrant list ever loaded.
+
+            `data-params-selector` is what makes it work without JavaScript of
+            our own: given a JSON object, `getParamsFromSelectors`
+            (`declarative.js:25`) sends `$(selector).val()` for each key, read
+            at click time. `#body` is TinyMCE's hidden input, which the editor
+            writes back to on every keystroke (`tinymce.js:277-282`), so this
+            previews what the organizer is looking at rather than the draft the
+            dialog opened with.
+
+            That object form of the attribute is what puts the plugin's Indico
+            floor at 3.3.5 -- before it, the string was read as a bare CSS
+            selector, nothing would be posted, and the endpoint would answer 400
+            on the missing `body`.
+
+            Core's version also sends `registration_id: getSelectedRows()[0]` --
+            another registrant-list global that does not exist here, and one
+            `RHRemindFormingGroupsPreview` would ignore anyway: it picks its own
+            recipient, the first member of a group still forming.
+        #}
+        <input class="i-button big" type="button" value="{%- trans %}Preview email{% endtrans -%}"
+               data-href="{{ url_for_plugin('group_registration.remind_forming_groups_preview', regform) }}"
+               data-method="POST"
+               data-ajax-dialog
+               data-title="{% trans %}Email preview{% endtrans %}"
+               data-params-selector='{"subject": "#subject", "body": "#body"}'>
         <button class="i-button big" data-button-back>{% trans %}Cancel{% endtrans %}</button>
     {% endcall %}
 {% endif %}

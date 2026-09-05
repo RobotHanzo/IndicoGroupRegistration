@@ -1,4 +1,6 @@
-"""The management pages' template names have to survive the WP class.
+"""What the management pages need from Indico that nothing else checks.
+
+Mostly template names, which have to survive the WP class.
 
 `WPJinjaMixin._prefix_template` prepends `template_prefix` to whatever name a
 controller passes, and `WPManageRegistration` sets that prefix to
@@ -6,9 +8,11 @@ controller passes, and `WPManageRegistration` sets that prefix to
 inheriting from `WPJinjaMixinPlugin` turns `group_registration:overview.html`
 into `events/registration/group_registration:overview.html`, and every
 management page 500s with `TemplateNotFound`.  These tests pin the two things
-that stop that: no prefix, and the plugin template loader.
+that stop that: no prefix, and the plugin template loader -- and, at the end,
+the wiring the reminder dialog's preview button cannot borrow from core.
 """
 
+import json
 import re
 from pathlib import Path
 
@@ -59,3 +63,40 @@ def test_the_reminder_dialog_template_exists():
     """
     templates = Path(__file__).parent.parent / 'indico_group_registration' / 'templates'
     assert (templates / 'remind_forming_groups.html').is_file()
+
+
+def _preview_button():
+    """The `<input>` in the reminder dialog that opens the preview."""
+    templates = Path(__file__).parent.parent / 'indico_group_registration' / 'templates'
+    source = (templates / 'remind_forming_groups.html').read_text()
+    match = re.search(r'<input[^>]*remind_forming_groups_preview[^>]*>', source, re.S)
+    assert match, 'the reminder dialog has no preview button'
+    return match.group(0)
+
+
+def test_the_preview_button_carries_its_own_wiring():
+    """It cannot borrow core's, which is why it broke the first time.
+
+    Core binds `#preview-email` inside `setupRegistrationList()`
+    (`registration/client/js/reglists.js`), and that runs from the registrant
+    list template alone.  This dialog opens from the Groups page, so a button
+    wearing core's id has nothing behind it and does nothing when pressed.
+    `setupActionLinks` in `declarative.js` binds `data-ajax-dialog` on every
+    page, which is the same handler that opens the dialog itself.
+    """
+    tag = _preview_button()
+    assert 'data-ajax-dialog' in tag
+    assert 'data-method="POST"' in tag
+    assert 'preview-email' not in tag
+
+
+def test_the_preview_button_sends_the_live_subject_and_body():
+    """Without them the endpoint 400s on `request.form['body']`.
+
+    jQuery only turns `data-params-selector` into an object if the attribute
+    parses as JSON; anything else it keeps as a string, which
+    `getParamsFromSelectors` then treats as a bare selector and sends nothing.
+    """
+    match = re.search(r"data-params-selector='([^']*)'", _preview_button())
+    assert match, 'the preview button posts no parameters'
+    assert json.loads(match.group(1)) == {'subject': '#subject', 'body': '#body'}

@@ -22,7 +22,11 @@ dependencies = [
     # that touches a migrated table -- so the range is capped at the series
     # this plugin is tested against. Install with `--no-deps` into an existing
     # Indico venv if you would rather pip did not touch Indico at all.
-    'indico>=3.3,<3.4',
+    # 3.3.5 is the floor, not 3.3: the reminder dialog's preview button posts the
+    # subject and body through `data-params-selector`, and its object form -- the
+    # one that maps a name to a selector -- arrived with core's own registration
+    # e-mail preview in that release.  Everything else here works on 3.3.0.
+    'indico>=3.3.5,<3.4',
 ]
 
 [project.optional-dependencies]
