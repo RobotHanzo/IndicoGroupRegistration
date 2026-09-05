@@ -18,7 +18,7 @@ from indico_group_registration.forms import GroupSettingsForm
 from indico_group_registration.models.groups import GroupState, RegistrationGroup
 from indico_group_registration.models.members import GroupMember
 from indico_group_registration.models.settings import GroupSettings
-from indico_group_registration.notifications import notify_group_dissolved
+from indico_group_registration.notifications import notify_group_dissolved, notify_group_reminder
 from indico_group_registration.operations import dissolve_group
 from indico_group_registration.pricing import pricing_in_progress, sync_balance_state
 from indico_group_registration.reconcile import reconcile_group
@@ -135,17 +135,57 @@ class RHGroupSettings(RHGroupRegFormBase):
                                                    regform=self.regform, form=form, settings=settings)
 
 
+def _load_groups(regform, *states):
+    """The groups on a form with their members, newest first.
+
+    Members and registrations come along in the same query: the page computes
+    every group's seat count, and the reminder prices every member.
+    """
+    query = (RegistrationGroup.query
+             .filter_by(registration_form_id=regform.id)
+             .options(joinedload(RegistrationGroup.members).joinedload(GroupMember.registration))
+             .order_by(RegistrationGroup.created_dt.desc()))
+    if states:
+        query = query.filter(RegistrationGroup.state.in_(states))
+    return query.all()
+
+
 class RHManageGroups(RHGroupRegFormBase):
     """Every group on this form."""
 
     def _process(self):
-        groups = (RegistrationGroup.query
-                  .filter_by(registration_form_id=self.regform.id)
-                  .options(joinedload(RegistrationGroup.members).joinedload(GroupMember.registration))
-                  .order_by(RegistrationGroup.created_dt.desc())
-                  .all())
+        groups = _load_groups(self.regform)
+        forming_count = sum(group.state == GroupState.forming for group in groups)
+        deadline = self.settings.get_reconciliation_dt() if self.settings else None
         return WPGroupRegistration.render_template('group_registration:groups.html', self.event,
-                                                   regform=self.regform, groups=groups, settings=self.settings)
+                                                   regform=self.regform, groups=groups, settings=self.settings,
+                                                   forming_count=forming_count, deadline=deadline)
+
+
+class RHRemindFormingGroups(RHGroupRegFormBase):
+    """Tell every member of every group still forming what falling short would cost.
+
+    This is the one e-mail an organizer sends by hand, and it keeps to the rule
+    the rest of the plugin's mail follows: it reaches only the members of a
+    group, with their own group's figures, and nothing a participant can do
+    triggers it.  Groups that are confirmed, short or dissolved cannot fall
+    short any more and are left alone.
+    """
+
+    def _process(self):
+        groups = _load_groups(self.regform, GroupState.forming)
+        if self.settings is None or not groups:
+            flash(_('No group on this form is still forming, so there is nobody to remind.'), 'info')
+            return jsonify_data(flash=False)
+        deadline = self.settings.get_reconciliation_dt()
+        sent = sum(notify_group_reminder(group, deadline) for group in groups)
+        self.event.log(EventLogRealm.management, LogKind.other, 'Registration',
+                       f'Reminded {sent} member(s) of {len(groups)} forming group(s) on "{self.regform.title}"',
+                       session.user)
+        db.session.commit()
+        flash(ngettext('A reminder was sent to one group member.',
+                       'A reminder was sent to {n} group members.', sent).format(n=sent), 'success')
+        return jsonify_data(flash=False)
 
 
 class RHGroupBalances(RHGroupRegFormBase):

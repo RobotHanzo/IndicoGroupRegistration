@@ -200,7 +200,11 @@ throttle to tune, and no way for a participant to make your server e-mail a
 stranger. Leaders share the link themselves.
 
 The plugin still sends system e-mails that are not participant-triggered: group
-confirmed, group short with the new amount, and balance due.
+confirmed, group short with the new amount, and balance due. An *organizer* can
+also send one by hand: a reminder to every member of every group still forming,
+quoting the deadline and what each member would owe if the group were repriced
+at its current size. It goes only to a group's own members, so the rule holds --
+nothing a participant does makes the server mail anyone.
 
 ## 8. Data model — schema `plugin_group_registration`
 

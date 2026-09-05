@@ -9,6 +9,7 @@ management page 500s with `TemplateNotFound`.  These tests pin the two things
 that stop that: no prefix, and the plugin template loader.
 """
 
+import re
 from pathlib import Path
 
 import pytest
@@ -35,3 +36,16 @@ def test_template_exists(name):
     # `group_registration:<name>` resolves to the plugin's own `templates/`.
     templates = Path(__file__).parent.parent / 'indico_group_registration' / 'templates'
     assert (templates / name).is_file()
+
+
+def test_every_email_template_exists():
+    """Each name `notifications._send` is handed must be a file.
+
+    A missing one blows up in the Celery worker -- or in the organizer's
+    request, for the reminder -- with nothing reaching anyone.
+    """
+    package = Path(__file__).parent.parent / 'indico_group_registration'
+    names = set(re.findall(r"'(group_\w+\.txt)'", (package / 'notifications.py').read_text()))
+    assert 'group_reminder.txt' in names
+    for name in names:
+        assert (package / 'templates' / 'emails' / name).is_file(), name

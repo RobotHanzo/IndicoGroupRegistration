@@ -140,9 +140,16 @@ Layered so the lower half never imports the upper half:
   list's *Customize list* dialog (`reglist.hide_internal_columns`). Anything
   that adds a fourth internal field has to do all three.
 - The plugin **never sends an invitation or any e-mail a participant can
-  trigger**. Only group-state changes mail: confirmed, short, dissolved. Keep it
+  trigger**. Group-state changes mail: confirmed, short, dissolved. The one
+  hand-sent mail is the organizer's reminder to forming groups
+  (`RHRemindFormingGroups`), and it reaches only a group's own members. Keep it
   that way — a participant-facing endpoint that mails a stranger is the thing
   this design exists to avoid.
+- **The deadline is resolved in two places that must agree.**
+  `reconcile.effective_deadline_column` (SQL, what the Celery task selects on)
+  and `GroupSettings.get_reconciliation_dt` (Python, what pages and the reminder
+  quote) both fall back reconciliation date → registration close → event start.
+  `tests/test_deadline.py` pins the Python side; change both or neither.
 
 ### Only one core template is forked
 

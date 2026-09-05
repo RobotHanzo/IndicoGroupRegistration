@@ -24,6 +24,8 @@ blueprint.add_url_rule('/manage/group-registration/', 'manage_overview',
                        management.RHGroupOverview)
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/', 'manage_groups',
                        management.RHManageGroups)
+blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/remind', 'remind_forming_groups',
+                       management.RHRemindFormingGroups, methods=('POST',))
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/settings', 'manage_settings',
                        management.RHGroupSettings, methods=('GET', 'POST'))
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/balances', 'manage_balances',

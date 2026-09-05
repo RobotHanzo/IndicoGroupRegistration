@@ -56,6 +56,23 @@ def compute_discount(registration, plan, applies_to):
     return discount_for(plan, discountable)
 
 
+def projected_price(registration, plan, applies_to):
+    """What `registration` would pay under `plan`, without writing anything.
+
+    The reminder to a forming group quotes this for the plan the group would
+    fall back to at its current size.  It is `Registration.price` recomputed
+    with our discount line swapped for the projected one -- the same sum core
+    does (base price, adjustment, every billable item, floored at zero), so the
+    figure in the e-mail is the figure the invoice would show.
+    """
+    discount_data = get_discount_data(registration)
+    base_price = Decimal(str(registration.base_price or 0))
+    adjustment = Decimal(str(registration.price_adjustment or 0))
+    other_items = _other_items_total(registration, discount_data)
+    discount = discount_for(plan, discountable_amount(base_price, other_items, applies_to))
+    return max(quantize(base_price + adjustment + other_items + discount), Decimal(0))
+
+
 def apply_member_pricing(member, plan, applies_to):
     """Write one member's discount line.  Returns the amount written."""
     registration = member.registration

@@ -11,6 +11,30 @@
 
 {% block content %}
     <div class="toolbar f-j-end">
+        {#
+            The one e-mail an organizer sends by hand.  It goes to every member
+            of every group still forming, and the endpoint answers with JSON,
+            so this is a declarative AJAX button like the row actions below
+            rather than a link.  A disabled button never fires, so with nothing
+            forming there is nothing to confirm.
+        #}
+        <button class="i-button icon-mail {{ 'disabled' if not forming_count }}"
+                {{ 'disabled' if not forming_count }}
+                data-href="{{ url_for_plugin('group_registration.remind_forming_groups', regform) }}"
+                data-method="POST"
+                data-reload-after
+                data-confirm="{% trans count=forming_count, deadline=deadline | format_datetime(timezone=event.tzinfo) if deadline else '?' -%}
+                                  E-mail every member of the one group still forming? Each is told that the group is
+                                  short, that it will be repriced if it has not filled by {{ deadline }}, and what they
+                                  would owe at its current size.
+                              {%- pluralize count -%}
+                                  E-mail every member of the {{ count }} groups still forming? Each is told that their
+                                  group is short, that it will be repriced if it has not filled by {{ deadline }}, and
+                                  what they would owe at its current size.
+                              {%- endtrans %}"
+                {% if not forming_count %}title="{% trans %}No group is still forming.{% endtrans %}"{% endif %}>
+            {% trans %}Remind forming groups{% endtrans %}
+        </button>
         <a class="i-button icon-settings"
            href="{{ url_for_plugin('group_registration.manage_settings', regform) }}">
             {% trans %}Settings{% endtrans %}
@@ -26,16 +50,25 @@
             {% trans %}Nobody has created a group on this form yet.{% endtrans %}
         {% endcall %}
     {% else %}
-        <table class="i-table-widget">
+        {#
+            Sorting is client-side, through the tablesorter core already loads on
+            every management page.  Columns whose text is not what they should
+            sort by carry the sort key in `data-text`, which the default
+            extraction reads before the cell's content: seats sort by members,
+            plans by seat count, states in lifecycle order rather than
+            alphabetically, and dates by timestamp.
+        #}
+        <table class="i-table-widget tablesorter js-group-list">
             <thead>
                 <tr>
                     <th>{% trans %}Group{% endtrans %}</th>
                     <th>{% trans %}Code{% endtrans %}</th>
                     <th>{% trans %}Leader{% endtrans %}</th>
-                    <th>{% trans %}Plan{% endtrans %}</th>
-                    <th class="text-right">{% trans %}Seats{% endtrans %}</th>
-                    <th>{% trans %}State{% endtrans %}</th>
-                    <th></th>
+                    <th data-sorter="digit">{% trans %}Plan{% endtrans %}</th>
+                    <th class="text-right" data-sorter="digit">{% trans %}Seats{% endtrans %}</th>
+                    <th data-sorter="digit">{% trans %}State{% endtrans %}</th>
+                    <th data-sorter="digit">{% trans %}Created{% endtrans %}</th>
+                    <th data-sorter="false"></th>
                 </tr>
             </thead>
             <tbody>
@@ -44,14 +77,14 @@
                     <tr>
                         <td>{{ group.name }}</td>
                         <td><code>{{ group.formatted_code }}</code></td>
-                        <td>
-                            {%- if group.leader_registration -%}
-                                {{ group.leader_registration.full_name }}
-                            {%- else -%}
+                        {%- if group.leader_registration %}
+                            <td>{{ group.leader_registration.full_name }}</td>
+                        {%- else %}
+                            <td data-text="">
                                 <span class="text-not-important">{% trans %}None{% endtrans %}</span>
-                            {%- endif -%}
-                        </td>
-                        <td>
+                            </td>
+                        {%- endif %}
+                        <td data-text="{{ plan.size if plan else 0 }}">
                             {{- plan.label if plan else _('Standard rate') -}}
                             {%- if group.state.name == 'short' and group.plan_id != group.effective_plan_id %}
                                 <span class="text-not-important">
@@ -61,8 +94,14 @@
                                 </span>
                             {% endif %}
                         </td>
-                        <td class="text-right">{{ group.member_count }} / {{ group.target_size }}</td>
-                        <td>{{ group.state.title }}</td>
+                        <td class="text-right" data-text="{{ group.member_count }}">
+                            {{ group.member_count }} / {{ group.target_size }}
+                        </td>
+                        <td data-text="{{ group.state.value }}">{{ group.state.title }}</td>
+                        <td data-text="{{ group.created_dt.timestamp() | int }}"
+                            title="{{ group.created_dt | format_datetime(timezone=event.tzinfo) }}">
+                            {{ group.created_dt | format_date(timezone=event.tzinfo) }}
+                        </td>
                         <td class="text-right">
                             {% if group.state.name == 'forming' %}
                                 <button class="i-button text-color borderless icon-loop js-reconcile"
@@ -78,9 +117,12 @@
                                         data-href="{{ url_for_plugin('group_registration.dissolve_group', group) }}"
                                         data-method="POST"
                                         data-reload-after
+                                        {# `&quot;`, not `"`: literal text in a `trans` block is not
+                                           escaped, and a bare quote here ended the attribute after
+                                           the word "Dissolve". #}
                                         data-confirm="{% trans name=group.name -%}
-                                            Dissolve "{{ name }}"? Every member goes back to the standard rate and
-                                            anyone who already paid will owe the difference.
+                                            Dissolve &quot;{{ name }}&quot;? Every member goes back to the standard
+                                            rate and anyone who already paid will owe the difference.
                                         {%- endtrans %}">
                                     {% trans %}Dissolve{% endtrans %}
                                 </button>
@@ -90,5 +132,23 @@
                 {% endfor %}
             </tbody>
         </table>
+
+        {#
+            A bare `<script>` on purpose: Indico's template loader stamps the
+            page's CSP nonce onto exactly that tag, so this runs whether or not
+            an instance enforces its Content Security Policy.  The two `css*`
+            options are the class names core's table styles draw the sort
+            arrows for; `headerTemplate` is emptied so tablesorter does not add
+            its own icon markup next to them; `textAttribute` is its default,
+            spelled out because the cells above rely on it.
+        #}
+        <script>
+            $('.js-group-list').tablesorter({
+                cssAsc: 'header-sort-asc',
+                cssDesc: 'header-sort-desc',
+                headerTemplate: '',
+                textAttribute: 'data-text',
+            });
+        </script>
     {% endif %}
 {% endblock %}

@@ -117,10 +117,19 @@ class GroupSettings(db.Model):
         return parse_plans(self.plans)
 
     def get_reconciliation_dt(self):
-        """When groups on this form get repriced."""
+        """When groups on this form get repriced.
+
+        The same chain as `reconcile.effective_deadline_column`, which is what
+        the Celery task actually selects on: the form's own reconciliation
+        date, then the date registration closes, then the event's start -- so
+        the deadline a reminder quotes is the one the task will act on.
+        """
         if self.reconciliation_dt is not None:
             return self.reconciliation_dt
-        return self.registration_form.end_dt
+        regform = self.registration_form
+        if regform.end_dt is not None:
+            return regform.end_dt
+        return regform.event.start_dt
 
     def __repr__(self):
         return format_repr(self, 'registration_form_id', 'enabled')

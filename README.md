@@ -102,6 +102,15 @@ themselves.
 The plugin does send e-mails that nobody can trigger on demand: group
 confirmed, group short with the new rate, and group dissolved.
 
+There is one more, and an organizer sends it. **Remind forming groups**, on the
+Groups page, e-mails every member of every group that has not filled yet: how
+many seats are still empty, the deadline after which the group is repriced, and
+what that member would pay -- and, if they have already paid, owe -- if the
+group were repriced at its current size. Each mail carries the group's code and
+join link so the members can go and fill it. Groups that are already confirmed,
+short or dissolved are not written to. The Groups page itself lists every group
+on the form and sorts by any column heading.
+
 ### Changing plan
 
 While a group is still forming and nobody in it has paid, the leader can move
