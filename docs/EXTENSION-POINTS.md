@@ -155,6 +155,58 @@ The same receiver drops the field's id from `visible_items`, because
 `.visibility:not(.enabled)` in the dialog whether it is displayed or not — so a
 column merely *hidden* could still be switched on and then never switched off.
 
+### Reusing core's e-mail dialog for a plugin's own mail
+
+`RHRegistrationEmailRegistrants` (`controllers/management/reglists.py:327`) is
+subclassable, and that is the cheapest way to let an organizer edit a mail the
+plugin composes. Core already owns the rich text editor, the placeholder
+description, the event locale, the sender addresses the organizer is allowed to
+use, the ticket attachment and the log entry; a subclass only has to change who
+the mail goes to.
+
+Recipients come from `RHRegistrationsActionBase._process_args`
+(`reglists.py:277`), which turns a posted `registration_id` list into
+`self.registrations`. Overriding `_process_args` to *find* them instead — and
+calling `RHManageRegFormBase._process_args` directly to skip the `use_kwargs`
+one — is what makes a toolbar button one click rather than "filter the list,
+select all, then compose", and it also means the posted ids are never trusted.
+
+Two things do not come for free:
+
+- The dialog template has to be copied, not reused.
+  `management/email.html:21` builds the preview URL from the **relative**
+  endpoint `.email_registrants_preview`, which resolves against whichever
+  blueprint is handling the request — from a plugin blueprint that is a
+  `BuildError`. Keep the `preview-email` id, though: core's delegated click
+  handler is what drives the button.
+- `RHRegistrationEmailRegistrantsPreview` quotes the mail against
+  `getSelectedRows()[0]` in core's JS, and nothing is selected when the
+  recipients were found rather than picked. A second subclass that returns the
+  first recipient is less work than shipping JavaScript to fix it.
+
+### Per-recipient figures: `signals.core.get_placeholders`
+
+One body goes to everybody, so anything that differs per recipient can only
+reach the mail as a placeholder. `replace_placeholders`
+(`util/placeholders.py:201`) is called once per registration in `_send_emails`,
+and the `registration-email` context is fed by
+`signals.core.get_placeholders.connect_via('registration-email')`
+(`registration/__init__.py:187`), which is sent **with `regform` and
+`registration`** — so a receiver can decline to offer its placeholders on a form
+that has nothing to do with the plugin. That is the only filter available:
+placeholders are otherwise registered for the whole instance and turn up in
+core's own *E-mail* action everywhere.
+
+Two constraints follow:
+
+- The receiver has to answer the same way for a given form every time. The
+  dialog *describes* the placeholders on one call
+  (`forms.py:277`) and *replaces* them on another; a name offered by the first
+  and missing from the second is sent out as literal braces.
+- Names are global. `named_objects_from_signal` raises on a duplicate, and it
+  raises for **every** registration e-mail in the instance, not only the ones
+  that use the placeholder — hence the `group_` prefix on all of ours.
+
 ### Menus, blueprints, models
 
 - `signals.menu.items` via `'event-management-sidemenu'` for a management page.

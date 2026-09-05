@@ -7,21 +7,27 @@ from werkzeug.exceptions import NotFound
 from indico.core.db import db
 from indico.core.plugins import WPJinjaMixinPlugin, url_for_plugin
 from indico.modules.events.registration.controllers.management import RHManageRegFormBase, RHManageRegFormsBase
+from indico.modules.events.registration.controllers.management.reglists import (RHRegistrationEmailRegistrants,
+                                                                                RHRegistrationEmailRegistrantsPreview)
+from indico.modules.events.registration.forms import EmailRegistrantsForm
+from indico.modules.events.registration.models.form_fields import RegistrationFormFieldData
 from indico.modules.events.registration.models.forms import RegistrationForm
+from indico.modules.events.registration.models.registrations import Registration, RegistrationData
 from indico.modules.events.registration.views import WPManageRegistration
 from indico.modules.logs import EventLogRealm, LogKind
 from indico.util.i18n import _, ngettext
 from indico.web.forms.base import FormDefaults
-from indico.web.util import jsonify_data
+from indico.web.util import jsonify_data, jsonify_template
 
 from indico_group_registration.forms import GroupSettingsForm
 from indico_group_registration.models.groups import GroupState, RegistrationGroup
 from indico_group_registration.models.members import GroupMember
 from indico_group_registration.models.settings import GroupSettings
-from indico_group_registration.notifications import notify_group_dissolved, notify_group_reminder
+from indico_group_registration.notifications import notify_group_dissolved
 from indico_group_registration.operations import dissolve_group
 from indico_group_registration.pricing import pricing_in_progress, sync_balance_state
 from indico_group_registration.reconcile import reconcile_group
+from indico_group_registration.reminders import default_body, default_subject
 from indico_group_registration.util import get_group_settings, provision_fields
 
 
@@ -135,19 +141,48 @@ class RHGroupSettings(RHGroupRegFormBase):
                                                    regform=self.regform, form=form, settings=settings)
 
 
-def _load_groups(regform, *states):
+def _load_groups(regform):
     """The groups on a form with their members, newest first.
 
     Members and registrations come along in the same query: the page computes
-    every group's seat count, and the reminder prices every member.
+    every group's seat count, which reads a registration's state per member.
     """
-    query = (RegistrationGroup.query
-             .filter_by(registration_form_id=regform.id)
-             .options(joinedload(RegistrationGroup.members).joinedload(GroupMember.registration))
-             .order_by(RegistrationGroup.created_dt.desc()))
-    if states:
-        query = query.filter(RegistrationGroup.state.in_(states))
-    return query.all()
+    return (RegistrationGroup.query
+            .filter_by(registration_form_id=regform.id)
+            .options(joinedload(RegistrationGroup.members).joinedload(GroupMember.registration))
+            .order_by(RegistrationGroup.created_dt.desc())
+            .all())
+
+
+def _forming_group_members(regform):
+    """Every live registration that belongs to a group still forming.
+
+    Confirmed, short and dissolved groups cannot fall short any more, so their
+    members have nothing left to be reminded about.  `is_active` is core's own
+    definition -- not deleted, not rejected, not withdrawn -- which is the same
+    rule the rest of the plugin's mail keeps to.
+
+    Ordered the way core orders the registrant list, which is what decides
+    whose registration the *Preview email* button quotes the mail against.
+
+    Everything the `{group_*}` placeholders read is eager-loaded, because they
+    are rendered once per recipient: the price alone walks three relationships
+    deep, and the group and the transaction are each a fresh query per person
+    otherwise.
+    """
+    return (Registration.query
+            .join(GroupMember, GroupMember.registration_id == Registration.id)
+            .join(RegistrationGroup, RegistrationGroup.id == GroupMember.group_id)
+            .filter(RegistrationGroup.registration_form_id == regform.id,
+                    RegistrationGroup.state == GroupState.forming,
+                    Registration.is_active)
+            .options(joinedload(Registration.data)
+                     .joinedload(RegistrationData.field_data)
+                     .joinedload(RegistrationFormFieldData.field),
+                     joinedload(Registration.transaction),
+                     joinedload(Registration.group_membership).joinedload(GroupMember.group))
+            .order_by(*Registration.order_by_name)
+            .all())
 
 
 class RHManageGroups(RHGroupRegFormBase):
@@ -155,37 +190,113 @@ class RHManageGroups(RHGroupRegFormBase):
 
     def _process(self):
         groups = _load_groups(self.regform)
+        # The count is what decides whether the reminder button is live; the
+        # dialog it opens quotes the deadline itself.
         forming_count = sum(group.state == GroupState.forming for group in groups)
-        deadline = self.settings.get_reconciliation_dt() if self.settings else None
         return WPGroupRegistration.render_template('group_registration:groups.html', self.event,
                                                    regform=self.regform, groups=groups, settings=self.settings,
-                                                   forming_count=forming_count, deadline=deadline)
+                                                   forming_count=forming_count)
 
 
-class RHRemindFormingGroups(RHGroupRegFormBase):
+class _ReminderMixin:
+    """What both reminder endpoints have to establish before they do anything.
+
+    The recipients are *found*, never read off the request.  `_process_args` on
+    core's e-mail handlers is where a submitted `registration_id` list becomes
+    the list of people written to, and skipping it is the whole point: the
+    button is one click, and no request can talk this endpoint into writing to
+    somebody who is not in a group that is still forming.
+
+    Rebuilding the list on the submit as well as on the open is deliberate and
+    not just tidiness -- a group that filled while the dialog sat open is
+    dropped, and so is a member who withdrew.
+    """
+
+    def _process_args(self):
+        # Not `RHGroupRegFormBase`: these two inherit from core's e-mail
+        # handlers instead, so the one line that base class adds is repeated
+        # here rather than borrowed from a class that is not in the MRO.
+        RHManageRegFormBase._process_args(self)
+        self.settings = get_group_settings(self.regform)
+        if self.settings is None:
+            raise NotFound(_('Group registration is not set up on this registration form.'))
+        self.registrations = self._find_recipients()
+
+    def _find_recipients(self):
+        raise NotImplementedError
+
+
+class RHRemindFormingGroups(_ReminderMixin, RHRegistrationEmailRegistrants):
     """Tell every member of every group still forming what falling short would cost.
 
     This is the one e-mail an organizer sends by hand, and it keeps to the rule
     the rest of the plugin's mail follows: it reaches only the members of a
     group, with their own group's figures, and nothing a participant can do
-    triggers it.  Groups that are confirmed, short or dissolved cannot fall
-    short any more and are left alone.
+    triggers it.
+
+    The wording is the organizer's.  Core's own *E-mail* action already does
+    every hard part of that -- the rich text editor, the placeholders, the
+    event locale, the sender addresses an organizer is allowed to use, the
+    preview, the log entry -- so this subclasses it and changes the two things
+    that matter: who the mail goes to, and what the dialog opens with.  The
+    figures that used to be baked into a Jinja template reach the mail as
+    `{group_*}` placeholders instead, which is what lets an organizer rewrite
+    the text around them without losing them.
     """
 
+    def _find_recipients(self):
+        return _forming_group_members(self.regform)
+
     def _process(self):
-        groups = _load_groups(self.regform, GroupState.forming)
-        if self.settings is None or not groups:
-            flash(_('No group on this form is still forming, so there is nobody to remind.'), 'info')
-            return jsonify_data(flash=False)
-        deadline = self.settings.get_reconciliation_dt()
-        sent = sum(notify_group_reminder(group, deadline) for group in groups)
-        self.event.log(EventLogRealm.management, LogKind.other, 'Registration',
-                       f'Reminded {sent} member(s) of {len(groups)} forming group(s) on "{self.regform.title}"',
-                       session.user)
-        db.session.commit()
-        flash(ngettext('A reminder was sent to one group member.',
-                       'A reminder was sent to {n} group members.', sent).format(n=sent), 'success')
-        return jsonify_data(flash=False)
+        if not self.registrations:
+            # Reachable: the button is only enabled while something is forming,
+            # but a page that has been open a while has an old count on it.
+            return jsonify_template('group_registration:remind_forming_groups.html', form=None,
+                                    regform=self.regform, event=self.event, count=0, group_count=0, deadline=None)
+
+        with self.event.force_event_locale():
+            subject, body = default_subject(), default_body()
+        form = EmailRegistrantsForm(subject=subject, body=body, regform=self.regform,
+                                    registration_id=[r.id for r in self.registrations],
+                                    recipients=[r.email for r in self.registrations])
+        # A reminder that a group has not filled is not a ticket delivery, and
+        # offering the switch would put an attachment for the amount that is
+        # about to change on the one mail that says it is about to change.
+        del form.attach_ticket
+
+        group_count = (RegistrationGroup.query
+                       .filter_by(registration_form_id=self.regform.id, state=GroupState.forming)
+                       .count())
+
+        if form.validate_on_submit():
+            self._send_emails(form)
+            count = len(self.registrations)
+            self.event.log(EventLogRealm.management, LogKind.other, 'Registration',
+                           f'Reminded {count} member(s) of {group_count} forming group(s) '
+                           f'on "{self.regform.title}"', session.user)
+            db.session.commit()
+            flash(ngettext('A reminder was sent to one group member.',
+                           'A reminder was sent to {n} group members.', count).format(n=count), 'success')
+            return jsonify_data()
+
+        return jsonify_template('group_registration:remind_forming_groups.html', form=form, regform=self.regform,
+                                event=self.event, count=len(self.registrations), group_count=group_count,
+                                deadline=self.settings.get_reconciliation_dt())
+
+
+class RHRemindFormingGroupsPreview(_ReminderMixin, RHRegistrationEmailRegistrantsPreview):
+    """Render the reminder as the first member on the list will read it.
+
+    Core's preview endpoint would have done, but the *Preview email* button is
+    wired to it by core's own JavaScript, which quotes the mail against
+    ``getSelectedRows()[0]`` -- and nothing is selected here, because the whole
+    point of the button is that nobody had to select anything.  Rather than
+    ship JavaScript to work around that, this picks the registration the JS
+    could not: the first member of a group still forming.
+    """
+
+    def _find_recipients(self):
+        return _forming_group_members(self.regform)[:1]
 
 
 class RHGroupBalances(RHGroupRegFormBase):

@@ -70,6 +70,8 @@ Layered so the lower half never imports the upper half:
 | `pricing.py` | Writes the discount onto registrations and re-syncs their state. |
 | `operations.py` | Every mutation of a group, always under a row lock. |
 | `reconcile.py` / `tasks.py` | Repricing groups that never filled; the Celery beat task. |
+| `reminders.py` | Pure. The wording the organizer's reminder dialog opens with. |
+| `placeholders.py` | The `{group_*}` e-mail placeholders those figures arrive as. |
 | `handlers.py` | What to do when Indico announces a lifecycle event. |
 | `fields.py` | The two registration field types. |
 | `util.py` | Lookups plus field provisioning. |
@@ -145,6 +147,23 @@ Layered so the lower half never imports the upper half:
   (`RHRemindFormingGroups`), and it reaches only a group's own members. Keep it
   that way — a participant-facing endpoint that mails a stranger is the thing
   this design exists to avoid.
+- **The reminder's wording is the organizer's, so its figures are placeholders.**
+  `RHRemindFormingGroups` subclasses core's `RHRegistrationEmailRegistrants` and
+  changes only who it goes to; the text comes from `reminders.default_body` and
+  every per-member number in it is a `{group_*}` placeholder core replaces per
+  recipient. The dialog template is a *copy* of core's `management/email.html`
+  because that file builds the preview URL from a relative endpoint, which is a
+  `BuildError` from a plugin blueprint. Recipients are found, never read off the
+  request — `_ReminderMixin` skips the `use_kwargs` `_process_args` that would
+  trust a posted id list.
+- **`plugin._get_email_placeholders` must answer the same way for a given form
+  every time.** The dialog *describes* the placeholders on one call and
+  *replaces* them on another, so a name offered by the first and missing from
+  the second goes out as literal braces. It gates on `is_enabled(regform)` and
+  nothing else, and every name is prefixed `group_`: `named_objects_from_signal`
+  raises on a duplicate for *every* registration e-mail in the instance, not just
+  the ones using the placeholder. `tests/test_reminders.py` pins both the prefix
+  and that the default wording only uses names something registers.
 - **The deadline is resolved in two places that must agree.**
   `reconcile.effective_deadline_column` (SQL, what the Celery task selects on)
   and `GroupSettings.get_reconciliation_dt` (Python, what pages and the reminder

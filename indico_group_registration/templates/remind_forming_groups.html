@@ -1,0 +1,54 @@
+{# The reminder dialog for the groups that have not filled yet.
+
+   A near-copy of core's `events/registration/management/email.html`, and it has
+   to be a copy rather than a reuse: that template builds the preview URL with
+   the relative endpoint `.email_registrants_preview`, which resolves against
+   whichever blueprint is handling the request -- so rendering it from this
+   plugin's blueprint asks Flask for
+   `plugin_group_registration.email_registrants_preview` and raises
+   `BuildError`.  The preview button keeps core's `preview-email` id, because
+   core's own delegated click handler is what drives it.
+#}
+
+{% from 'forms/_form.html' import form_header, form_rows, form_footer %}
+{% from 'message_box.html' import message_box %}
+
+{% if not form %}
+    {% call message_box('info') %}
+        {% trans %}No group on this form is still forming, so there is nobody to remind.{% endtrans %}
+    {% endcall %}
+    <div class="text-right">
+        <button class="i-button big" data-button-back>{% trans %}Close{% endtrans %}</button>
+    </div>
+{% else %}
+    {# Two paragraphs rather than two sentences: the box is as wide as the
+       dialog, so run together they come out as one line of small print that
+       nobody finishes reading.  `<p>` is the idiom the message box is built
+       for -- `_messageboxes.scss` already trims the margin off its first and
+       last child paragraph, which is why neither needs a class here. #}
+    {% call message_box('info') %}
+        <p>
+            {%- trans count=count, groups=group_count,
+                      deadline=deadline | format_datetime(timezone=event.tzinfo) -%}
+                One member of a group that is still forming gets this e-mail. Those groups are repriced
+                on {{ deadline }} if they have not filled.
+            {%- pluralize count -%}
+                {{ count }} members of the {{ groups }} groups that are still forming get this e-mail. Those
+                groups are repriced on {{ deadline }} if they have not filled.
+            {%- endtrans -%}
+        </p>
+        <p>
+            {%- trans %}Each figure below is filled in per recipient from their own group. A group that fills
+                        while this dialog is open is dropped when you send.{% endtrans -%}
+        </p>
+    {% endcall %}
+
+    {{ form_header(form) }}
+    {{ form_rows(form) }}
+    {% call form_footer(form) %}
+        <input type="submit" class="i-button highlight big" value="{% trans %}Send{% endtrans %}">
+        <input id="preview-email" class="i-button big" type="button" value="{%- trans %}Preview email{% endtrans -%}"
+               data-href="{{ url_for_plugin('group_registration.remind_forming_groups_preview', regform) }}">
+        <button class="i-button big" data-button-back>{% trans %}Cancel{% endtrans %}</button>
+    {% endcall %}
+{% endif %}

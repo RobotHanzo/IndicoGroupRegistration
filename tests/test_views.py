@@ -41,11 +41,21 @@ def test_template_exists(name):
 def test_every_email_template_exists():
     """Each name `notifications._send` is handed must be a file.
 
-    A missing one blows up in the Celery worker -- or in the organizer's
-    request, for the reminder -- with nothing reaching anyone.
+    A missing one blows up in the Celery worker with nothing reaching anyone.
     """
     package = Path(__file__).parent.parent / 'indico_group_registration'
     names = set(re.findall(r"'(group_\w+\.txt)'", (package / 'notifications.py').read_text()))
-    assert 'group_reminder.txt' in names
+    assert names
     for name in names:
         assert (package / 'templates' / 'emails' / name).is_file(), name
+
+
+def test_the_reminder_dialog_template_exists():
+    """The reminder dialog does not go through `WPGroupRegistration`.
+
+    `jsonify_template` renders it straight into the AJAX dialog, so it is not
+    covered by the names above -- but a missing file still 500s the one button
+    on the Groups page an organizer presses.
+    """
+    templates = Path(__file__).parent.parent / 'indico_group_registration' / 'templates'
+    assert (templates / 'remind_forming_groups.html').is_file()

@@ -12,28 +12,20 @@
 {% block content %}
     <div class="toolbar f-j-end">
         {#
-            The one e-mail an organizer sends by hand.  It goes to every member
-            of every group still forming, and the endpoint answers with JSON,
-            so this is a declarative AJAX button like the row actions below
-            rather than a link.  A disabled button never fires, so with nothing
-            forming there is nothing to confirm.
+            The one e-mail an organizer sends by hand.  It opens a dialog rather
+            than firing on a confirmation, because the wording is theirs to edit
+            before it goes out; the count is in the label so the button says how
+            much it is about to do before it is pressed.  A disabled button never
+            fires, so with nothing forming there is nothing to open.
         #}
         <button class="i-button icon-mail {{ 'disabled' if not forming_count }}"
                 {{ 'disabled' if not forming_count }}
                 data-href="{{ url_for_plugin('group_registration.remind_forming_groups', regform) }}"
-                data-method="POST"
-                data-reload-after
-                data-confirm="{% trans count=forming_count, deadline=deadline | format_datetime(timezone=event.tzinfo) if deadline else '?' -%}
-                                  E-mail every member of the one group still forming? Each is told that the group is
-                                  short, that it will be repriced if it has not filled by {{ deadline }}, and what they
-                                  would owe at its current size.
-                              {%- pluralize count -%}
-                                  E-mail every member of the {{ count }} groups still forming? Each is told that their
-                                  group is short, that it will be repriced if it has not filled by {{ deadline }}, and
-                                  what they would owe at its current size.
-                              {%- endtrans %}"
-                {% if not forming_count %}title="{% trans %}No group is still forming.{% endtrans %}"{% endif %}>
-            {% trans %}Remind forming groups{% endtrans %}
+                data-title="{% trans %}Remind forming groups{% endtrans %}"
+                data-ajax-dialog
+                title="{{ _('Write to every member of every group that has not filled yet.')
+                          if forming_count else _('No group is still forming.') }}">
+            {%- trans %}Remind forming groups{% endtrans %}{% if forming_count %} ({{ forming_count }}){% endif %}
         </button>
         <a class="i-button icon-settings"
            href="{{ url_for_plugin('group_registration.manage_settings', regform) }}">

@@ -20,7 +20,7 @@ REQUIRED_FILES = [
     f'{PKG}/templates/_group_panel.html',
     f'{PKG}/templates/settings.html',
     f'{PKG}/templates/emails/group_short.txt',
-    f'{PKG}/templates/emails/group_reminder.txt',
+    f'{PKG}/templates/remind_forming_groups.html',
     f'{PKG}/templates/customization/core/events/payment/event_checkout.html',
     f'{PKG}/static/dist/manifest.json',
 ]

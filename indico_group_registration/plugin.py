@@ -18,6 +18,7 @@ from indico_group_registration.fields import GroupDiscountField, GroupPlanField
 from indico_group_registration.handlers import (get_locked_field_reason, handle_registration_created,
                                                 handle_registration_deleted, handle_registration_state_updated,
                                                 handle_registration_updated)
+from indico_group_registration.placeholders import GROUP_PLACEHOLDERS
 from indico_group_registration.reglist import REGLIST_FILTER_TEMPLATE, GroupListItem, hide_internal_columns
 from indico_group_registration.util import get_switchable_plans, is_enabled
 
@@ -55,6 +56,10 @@ class GroupRegistrationPlugin(IndicoPlugin):
         # Management UI.
         self.connect(signals.event.registrant_list_items, self._registrant_list_items)
         self.connect(signals.menu.items, self._sidemenu_items, sender='event-management-sidemenu')
+
+        # The organizer edits the reminder before it goes out, so the figures
+        # in it reach the mail as placeholders core replaces per recipient.
+        self.connect(signals.core.get_placeholders, self._get_email_placeholders, sender='registration-email')
 
         # The "Customize list" dialog builds its column list from the form
         # itself and core has no hook for leaving a field out, so the internal
@@ -118,6 +123,32 @@ class GroupRegistrationPlugin(IndicoPlugin):
         return SideMenuItem('group_registration', _('Group registration'),
                             url_for_plugin('group_registration.manage_overview', event),
                             section='organization', weight=-10)
+
+    def _get_email_placeholders(self, sender, regform=None, **kwargs):
+        """Offer the group figures to every e-mail sent from a group-enabled form.
+
+        Placeholders are registered per context for the whole instance, and the
+        signal carries the form the mail is being written for -- which is the
+        one chance to keep thirteen `{group_*}` names out of core's *E-mail*
+        dialog on every other registration form there is.
+
+        It has to answer the same way for a given form every time.  The dialog
+        *describes* the placeholders on one call and *replaces* them on
+        another, so a name offered by the first and missing from the second
+        would go out as literal braces.
+
+        Reading the setting is guarded because the rest of this is a generator,
+        whose body does not run until the signal's result is iterated -- which
+        is halfway through building somebody's mail, on a path this plugin does
+        not own.
+        """
+        try:
+            enabled = regform is not None and is_enabled(regform)
+        except Exception:
+            self.logger.exception('Could not decide whether to offer the group e-mail placeholders')
+            return
+        if enabled:
+            yield from GROUP_PLACEHOLDERS
 
     def _before_render_template(self, sender, template=None, context=None, **kwargs):
         """Filter the registrant-list column dialog just before it renders.

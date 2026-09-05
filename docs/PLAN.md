@@ -206,6 +206,13 @@ quoting the deadline and what each member would owe if the group were repriced
 at its current size. It goes only to a group's own members, so the rule holds --
 nothing a participant does makes the server mail anyone.
 
+That last one is the only e-mail whose wording is not the plugin's. It opens in
+core's own e-mail dialog with a draft and the recipients already found, and the
+per-member figures reach it as `{group_*}` placeholders Indico replaces per
+recipient — so an organizer can rewrite the text without losing the numbers,
+and without the plugin having to own a rich text editor, a preview, a sender
+list or a placeholder engine of its own.
+
 ## 8. Data model — schema `plugin_group_registration`
 
 **`group_settings`** — one row per registration form

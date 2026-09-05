@@ -103,13 +103,38 @@ The plugin does send e-mails that nobody can trigger on demand: group
 confirmed, group short with the new rate, and group dissolved.
 
 There is one more, and an organizer sends it. **Remind forming groups**, on the
-Groups page, e-mails every member of every group that has not filled yet: how
-many seats are still empty, the deadline after which the group is repriced, and
-what that member would pay -- and, if they have already paid, owe -- if the
-group were repriced at its current size. Each mail carries the group's code and
-join link so the members can go and fill it. Groups that are already confirmed,
-short or dissolved are not written to. The Groups page itself lists every group
-on the form and sorts by any column heading.
+Groups page, opens Indico's own e-mail dialog with the recipients already found
+-- every member of every group that has not filled yet -- and a draft you can
+read, rewrite and preview before anything is sent. Groups that are already
+confirmed, short or dissolved are not written to, and a group that fills while
+the dialog is open is dropped when you press Send.
+
+The draft is only a starting point. The figures in it are placeholders Indico
+fills in **per recipient, from that person's own group**, so you can move them,
+drop them or write around them and they still quote the right numbers:
+
+| Placeholder | What it becomes |
+| --- | --- |
+| `{group_name}` | the name of the recipient's group |
+| `{group_code}` | the code others type to join it |
+| `{group_link}` | the join link |
+| `{group_plan}` | the rate the group is forming under |
+| `{group_fallback_plan}` | the rate it qualifies for at its current size |
+| `{group_members}` / `{group_target}` / `{group_seats_left}` | how full it is |
+| `{group_deadline}` | when it gets repriced if it has not filled |
+| `{group_price}` | what the recipient pays at the group rate |
+| `{group_new_price}` | what they would pay at the group's current size |
+| `{group_difference}` | how much more that is |
+| `{group_balance}` | what they would then still owe, against what they have paid |
+
+Core's own placeholders -- `{first_name}`, `{event_title}`, `{link}` and the
+rest -- work alongside them. They are offered on any registration form that has
+group registration switched on, so they are available in Indico's ordinary
+*E-mail* action there too; on a form without group registration they do not
+appear at all.
+
+The Groups page itself lists every group on the form and sorts by any column
+heading.
 
 ### Changing plan
 
