@@ -10,6 +10,6 @@ deadline and reports what each member still owes.
 from indico.util.i18n import make_bound_gettext
 
 
-__version__ = '0.4.1'
+__version__ = '0.4.2'
 
 _ = make_bound_gettext('group_registration')
