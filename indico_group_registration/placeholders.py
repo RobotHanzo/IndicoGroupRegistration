@@ -21,7 +21,7 @@ from decimal import Decimal
 from markupsafe import Markup
 
 from indico.core.plugins import url_for_plugin
-from indico.util.date_time import format_currency, format_datetime
+from indico.util.date_time import format_currency
 from indico.util.i18n import _
 from indico.util.placeholders import Placeholder
 
@@ -154,10 +154,10 @@ class GroupDeadlinePlaceholder(GroupPlaceholder):
         settings = group.settings
         if settings is None:
             return ''
-        # The timezone is named rather than merely applied: this is the one
-        # figure in the mail a reader may act on at the last minute.
-        event = group.event
-        return f'{format_datetime(settings.get_reconciliation_dt(), timezone=event.tzinfo)} ({event.timezone})'
+        # Not formatted here: the confirmation mail quotes the same date when a
+        # confirmed group can still fall back to forming, and the two have to
+        # read alike.
+        return settings.format_reconciliation_dt()
 
 
 class GroupPricePlaceholder(GroupPlaceholder):

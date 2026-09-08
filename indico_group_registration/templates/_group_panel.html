@@ -46,9 +46,26 @@
                 </p>
             {% elif group.state.name == 'confirmed' %}
                 <p>
-                    {% trans label=chosen.label if chosen else '' -%}
-                        This group is confirmed on the "{{ label }}" rate. The amount you pay will not change.
-                    {%- endtrans %}
+                    {#
+                        Whether a confirmed rate is settled is the organizer's
+                        `revoke_on_member_loss`: with it on, a member who leaves
+                        or is rejected drops the group back to `forming`, and
+                        this is the page the member checks afterwards.  Saying
+                        the amount cannot change and then changing it is the one
+                        thing the panel must not do.
+                    #}
+                    {% if group.reprices_on_member_loss %}
+                        {% trans label=chosen.label if chosen else '', target=group.target_size -%}
+                            This group is confirmed on the "{{ label }}" rate. It keeps that rate while it has
+                            its {{ target }} members -- if one of them leaves or is rejected, the group goes
+                            back to forming and has to fill again before the deadline, or everyone in it is
+                            repriced.
+                        {%- endtrans %}
+                    {% else %}
+                        {% trans label=chosen.label if chosen else '' -%}
+                            This group is confirmed on the "{{ label }}" rate. The amount you pay will not change.
+                        {%- endtrans %}
+                    {% endif %}
                 </p>
             {% elif group.state.name == 'short' %}
                 <p>

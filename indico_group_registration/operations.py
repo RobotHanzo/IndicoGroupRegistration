@@ -239,12 +239,14 @@ def recount_group(group):
         notify_group_confirmed(group)
         return group
 
-    if group.state == GroupState.confirmed and count < group.target_size:
-        settings = get_group_settings(group.registration_form)
-        if settings is not None and settings.revoke_on_member_loss:
-            group.state = GroupState.forming
-            group.confirmed_dt = None
-            db.session.flush()
-            apply_group_pricing(group)
+    # Back to forming, not straight to a new price: a forming group is charged
+    # its chosen plan just as a confirmed one is, so nobody is rebilled on the
+    # spot.  What the group loses is its exemption from reconciliation -- which
+    # is exactly what `templates/emails/group_confirmed.txt` has to have said.
+    if group.state == GroupState.confirmed and count < group.target_size and group.reprices_on_member_loss:
+        group.state = GroupState.forming
+        group.confirmed_dt = None
+        db.session.flush()
+        apply_group_pricing(group)
 
     return group

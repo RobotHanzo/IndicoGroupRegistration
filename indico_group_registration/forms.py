@@ -117,7 +117,10 @@ class GroupSettingsForm(IndicoForm):
 
     revoke_on_member_loss = BooleanField(_('Reprice a confirmed group that loses a member'), widget=SwitchWidget(),
                                          description=_('Off by default: nobody should be rebilled because somebody '
-                                                       'else was rejected after the group confirmed.'))
+                                                       'else was rejected after the group confirmed. On, such a '
+                                                       'group goes back to forming, and the plan picker, the '
+                                                       'confirmation e-mail, the group panel and the checkout all '
+                                                       'stop telling members their amount is final.'))
 
     disclaimer_text = TextAreaField(_('Disclaimer'), render_kw={'rows': 6},
                                     description=_('Shown next to the plan picker, and the participant must accept it. '

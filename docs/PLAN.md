@@ -70,7 +70,13 @@ any state ──(manager acts)──▶ dissolved   (all discounts reverted)
   the rate is final, and it never gets worse afterwards: if a member is later
   rejected or withdraws, the remaining members keep the confirmed rate
   (`revoke_on_member_loss`, default off — nobody should be rebilled because
-  somebody else's moderation failed).
+  somebody else's moderation failed). Turned on, the group drops back to
+  `forming` rather than being repriced on the spot — it keeps its plan's rate
+  and loses only its exemption from §4 — so the four places that quote a
+  confirmed member's price (plan picker, confirmation mail, group panel,
+  checkout) all ask `RegistrationGroup.reprices_on_member_loss` before calling
+  the amount final. A promise made on one page and taken back on another is the
+  one thing worse than the repricing itself.
 - **`short`** — the deadline passed with the plan unmet. See §4.
 - **`dissolved`** — manager action; every member reverts to the standard rate.
 

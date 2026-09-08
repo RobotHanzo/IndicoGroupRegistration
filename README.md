@@ -58,7 +58,7 @@ left behind. Leaving `basePrice` alone is what keeps those two answers the same.
 | State | What it means |
 | --- | --- |
 | `forming` | Seats filling. Members pay the chosen plan's rate, whenever they like. |
-| `confirmed` | The seat count was reached. Automatic. The rate is final and never gets worse. |
+| `confirmed` | The seat count was reached. Automatic. The rate is final and never gets worse — unless **Reprice a confirmed group that loses a member** is on, when a member leaving or being rejected puts the group back to `forming`. Every notice that quotes a confirmed member's price says which of the two it is. |
 | `short` | The deadline passed with seats empty. Repriced to whatever the group does qualify for; balances may be due. |
 | `dissolved` | A manager took it apart. Everyone is back on the standard rate. |
 
@@ -271,7 +271,7 @@ Nothing changes on a form until group registration is enabled for it.
 | Allow paying before the group fills | on | |
 | Groups per person | 1 | 0 for no limit |
 | Count registrations awaiting approval | on | Withdrawn and rejected never count |
-| Reprice a confirmed group that loses a member | off | Nobody should be rebilled over somebody else's moderation |
+| Reprice a confirmed group that loses a member | off | Nobody should be rebilled over somebody else's moderation. On, the group goes back to `forming` and every notice stops calling the rate final |
 | Disclaimer | a sensible default | Versioned; the version and time of acceptance are stored per membership |
 
 Enabling group registration provisions two fields on the form:

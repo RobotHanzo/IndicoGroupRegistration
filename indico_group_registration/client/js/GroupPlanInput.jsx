@@ -78,6 +78,7 @@ export default function GroupPlanInput({
   appliesTo,
   disclaimer,
   allowEarlyPayment,
+  revokeOnMemberLoss,
   enabled,
 }) {
   const {input} = useField(htmlName, {allowNull: true});
@@ -254,11 +255,28 @@ export default function GroupPlanInput({
 
           {chosenPlan && (
             <Message info>
-              <Translate>
-                You will get a code and a link to share. Your group confirms itself as soon as{' '}
-                <Param name="size" value={chosenPlan.size} /> people have joined, and the rate is
-                then final.
-              </Translate>
+              {/*
+                Whether confirming settles the rate is the organizer's
+                "Reprice a confirmed group that loses a member". With it on the
+                group can fall back to forming, so the promise made here has to
+                be the same one the confirmation mail, the group panel and the
+                checkout make later -- this is where it is made first, to
+                somebody deciding whether to register at all.
+              */}
+              {revokeOnMemberLoss ? (
+                <Translate>
+                  You will get a code and a link to share. Your group confirms itself as soon as{' '}
+                  <Param name="size" value={chosenPlan.size} /> people have joined, and it has to
+                  keep them: if it drops back below that, it must fill again before the deadline or
+                  everyone in it is repriced.
+                </Translate>
+              ) : (
+                <Translate>
+                  You will get a code and a link to share. Your group confirms itself as soon as{' '}
+                  <Param name="size" value={chosenPlan.size} /> people have joined, and the rate is
+                  then final.
+                </Translate>
+              )}
             </Message>
           )}
         </div>
@@ -343,6 +361,7 @@ GroupPlanInput.propTypes = {
   appliesTo: PropTypes.oneOf(['base', 'total']),
   disclaimer: PropTypes.string,
   allowEarlyPayment: PropTypes.bool,
+  revokeOnMemberLoss: PropTypes.bool,
   enabled: PropTypes.bool,
 };
 
@@ -354,5 +373,6 @@ GroupPlanInput.defaultProps = {
   appliesTo: 'base',
   disclaimer: '',
   allowEarlyPayment: true,
+  revokeOnMemberLoss: false,
   enabled: false,
 };

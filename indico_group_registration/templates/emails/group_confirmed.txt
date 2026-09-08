@@ -14,9 +14,21 @@
 Your group "{{ name }}" reached {{ count }} members and is now confirmed for {{ title }}.
 {%- endtrans %}
 
+{% if group.reprices_on_member_loss %}
+{% trans price=registration.render_price(), target=group.target_size -%}
+The amount you pay is {{ price }}. It holds while the group has its {{ target }} members: if one of them leaves or is rejected, the group goes back to forming and has to fill again.
+{%- endtrans %}
+
+{% if deadline %}
+{% trans deadline=deadline -%}
+If that happens and the group has not filled again by {{ deadline }}, everyone in it is repriced to the rate it qualifies for at that point -- including anyone who has already paid.
+{%- endtrans %}
+{% endif %}
+{% else %}
 {% trans price=registration.render_price() -%}
 The amount you pay is {{ price }}. This is final -- it will not change if members join or leave from now on.
 {%- endtrans %}
+{% endif %}
 {% if registration.state.name == 'unpaid' %}
 
 {% trans url=url_for('event_registration.display_regform', registration.locator.registrant, _external=true) -%}

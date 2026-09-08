@@ -89,6 +89,15 @@ Layered so the lower half never imports the upper half:
 - **A group's price comes from its `pricing_plan`, not from how full it is.**
   That is what makes early payment safe: nothing moves until reconciliation or
   dissolution.
+- **Nothing may call a confirmed rate final without asking
+  `revoke_on_member_loss`.** With that setting on, `operations.recount_group`
+  drops a group that loses a member back to `forming` — it keeps its plan's
+  rate, but the deadline can reprice it again. Four places quote a confirmed
+  member's price: the plan picker, `group_confirmed.txt`, the group panel and
+  the forked checkout. Each asks `RegistrationGroup.reprices_on_member_loss`
+  (`revokeOnMemberLoss`, out of `GroupPlanField.view_data`, in the picker), and
+  `tests/test_finality.py` fails any file that makes the promise without the
+  guard.
 - **`target_size` and `plan_id` are copied onto the group at creation**, and plan
   ids are opaque generated keys (`forms._new_plan_id`). Renaming, repricing or
   reordering a plan must never retarget a group already forming under it.

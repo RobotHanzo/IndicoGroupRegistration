@@ -4,6 +4,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 from indico.core.db import db
 from indico.core.db.sqlalchemy import UTCDateTime
+from indico.util.date_time import format_datetime
 from indico.util.string import format_repr
 
 from indico_group_registration.models import SCHEMA
@@ -130,6 +131,18 @@ class GroupSettings(db.Model):
         if regform.end_dt is not None:
             return regform.end_dt
         return regform.event.start_dt
+
+    def format_reconciliation_dt(self):
+        """The deadline as a reader is told it.
+
+        One wording, because a member can be told the same date twice: the
+        reminder quotes it through `{group_deadline}`, and the confirmation
+        mail quotes it again when a confirmed group can still fall back to
+        forming.  The timezone is named rather than merely applied -- this is
+        the one figure in either mail somebody may act on at the last minute.
+        """
+        event = self.registration_form.event
+        return f'{format_datetime(self.get_reconciliation_dt(), timezone=event.tzinfo)} ({event.timezone})'
 
     def __repr__(self):
         return format_repr(self, 'registration_form_id', 'enabled')

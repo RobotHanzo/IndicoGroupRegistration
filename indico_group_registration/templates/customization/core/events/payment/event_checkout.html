@@ -50,7 +50,23 @@
                             reach {{ target }} by the deadline, you will be asked to pay the difference.
                         {%- endtrans %}
                     {% elif group.state.name == 'confirmed' %}
-                        {% trans %}The group is confirmed, so this amount is final.{% endtrans %}
+                        {#
+                            The checkout is where somebody decides to hand the
+                            money over, so it is the worst page on which to
+                            promise a price the plugin may take back: with
+                            `revoke_on_member_loss` on, a confirmed group that
+                            loses a member goes back to forming and can still be
+                            repriced at the deadline.
+                        #}
+                        {% if group.reprices_on_member_loss %}
+                            {% trans target=group.target_size -%}
+                                The group is confirmed, but it has to keep its {{ target }} members. If one of them
+                                leaves or is rejected and the group has not filled again by the deadline, you will
+                                be asked to pay the difference.
+                            {%- endtrans %}
+                        {% else %}
+                            {% trans %}The group is confirmed, so this amount is final.{% endtrans %}
+                        {% endif %}
                     {% endif %}
                 </div>
             </div>

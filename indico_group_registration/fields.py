@@ -89,6 +89,10 @@ class GroupPlanField(RegistrationFormFieldBase):
             applies_to=(settings.applies_to if settings else APPLIES_TO_BASE),
             disclaimer=(settings.disclaimer_text if settings else ''),
             allow_early_payment=(settings.allow_early_payment if settings else True),
+            # Whether the picker may call the confirmed rate final.  Same
+            # question the confirmation mail and the group panel ask, asked
+            # before anyone has registered: the promise is made here first.
+            revoke_on_member_loss=(settings.revoke_on_member_loss if settings else False),
         )
 
     def get_validators(self, existing_registration):

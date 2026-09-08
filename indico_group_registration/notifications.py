@@ -36,9 +36,20 @@ def _send(group, member, registration, template_name, **context):
 
 
 def notify_group_confirmed(group):
-    """The group filled: the rate everyone is on is now final."""
+    """The group filled.
+
+    Whether that settles the rate is the organizer's `revoke_on_member_loss`:
+    with it on, a member who leaves or is rejected puts the group back to
+    forming, and the mail has to say so rather than promise a price the
+    plugin may take back.  The deadline goes in from here because that is the
+    date the group would then be repriced on, worded exactly as the reminder
+    words it.
+    """
+    # `reprices_on_member_loss` is false without a settings row, so this cannot
+    # be reached without one.
+    deadline = group.settings.format_reconciliation_dt() if group.reprices_on_member_loss else None
     for member, registration in _live_members(group):
-        _send(group, member, registration, 'group_confirmed.txt')
+        _send(group, member, registration, 'group_confirmed.txt', deadline=deadline)
 
 
 def notify_group_short(group, outcomes):

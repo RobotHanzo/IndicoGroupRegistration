@@ -27,7 +27,11 @@ class GroupState(RichIntEnum):
 
     #: Seats are filling.  Members pay the chosen plan's rate.
     forming = 1
-    #: The plan's seat count was reached.  The rate is final.
+    #: The plan's seat count was reached.  The rate holds -- unless the
+    #: organizer turned `revoke_on_member_loss` on, in which case losing a
+    #: member puts the group back to `forming`.  Nothing that tells a member
+    #: what they owe may call this final without asking; see
+    #: `RegistrationGroup.reprices_on_member_loss`.
     confirmed = 2
     #: The deadline passed with seats empty.  Repriced; balances may be due.
     short = 3
@@ -156,6 +160,20 @@ class RegistrationGroup(db.Model):
     @property
     def settings(self):
         return self.registration_form.group_settings
+
+    @property
+    def reprices_on_member_loss(self):
+        """Whether losing a member puts this group back to forming.
+
+        The organizer's `revoke_on_member_loss`, read through a settings row
+        that may not be there.  It is a property on the group rather than a
+        lookup at each call site because every notice that quotes a confirmed
+        member's price has to ask it: while it is on, a confirmed rate is not
+        final, and a mail that says it is turns the eventual repricing into a
+        mistake the organizer has to explain.
+        """
+        settings = self.settings
+        return settings is not None and settings.revoke_on_member_loss
 
     @property
     def plans(self):
