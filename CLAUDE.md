@@ -137,6 +137,17 @@ Layered so the lower half never imports the upper half:
 - **Celery only sees imported modules.** `plugin.py` connects
   `signals.core.import_tasks` purely to import `tasks`; without it the
   reconciliation task is never registered.
+- **The reconciliation task must keep `request_context=True`.** Repricing moves
+  a member between `complete` and `unpaid`, and both `pricing.sync_balance_state`
+  and core's own `Registration.sync_state` announce that with
+  `registration_state_updated` — which core logs by reading `session.user`, with
+  nothing guarding it. A Celery task has no session unless it asks for a request
+  context, so without the flag every group holding a member whose payment state
+  moves raises inside `reconcile_due_groups`, is rolled back on its own, and
+  stays `forming` past its deadline for ever — while *Reprice now*, which runs
+  in a request, reprices the same group happily. `tests/test_tasks.py` pins it
+  for every task the plugin schedules, because the failure is invisible from the
+  group.
 - **`WPGroupRegistration` lists `WPJinjaMixinPlugin` first**, before
   `WPManageRegistration` — otherwise the inherited `template_prefix` mangles
   `group_registration:overview.html` and every management page 500s.

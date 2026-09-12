@@ -243,6 +243,23 @@ does not name the input type; the form editor prints
 `Unknown input type: <name>` in place of the offending field, so look for that
 before opening the dialog.
 
+### If groups are never repriced at the deadline
+
+The deadline passes, the group stays **Forming**, and clicking **Reprice now**
+on the same group works. Look in the Celery worker log for
+
+```
+Could not reconcile group <id>
+RuntimeError: Working outside of request context.
+```
+
+That is a plugin older than 0.4.3: the repricing task ran without a request
+context, and the moment a member's payment state moved — which is any member
+who had already paid, and anyone whose discounted price was zero — core's own
+log receiver for that state change reached for `session.user` and raised. Each group failed on its own and was rolled back, so nothing else broke
+and nothing said so. Upgrade, restart the Celery worker, and the next run picks
+up every group that has been waiting; no data needs fixing.
+
 ### If the site is throwing `UndefinedColumn` errors
 
 Indico's code is ahead of its database. Nothing to do with this plugin's
