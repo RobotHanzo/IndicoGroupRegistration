@@ -98,6 +98,17 @@ Layered so the lower half never imports the upper half:
   (`revokeOnMemberLoss`, out of `GroupPlanField.view_data`, in the picker), and
   `tests/test_finality.py` fails any file that makes the promise without the
   guard.
+- **Reconciliation is not the last word on a short group's rate.**
+  `operations._restore_short_group` runs on every recount of a `short` group:
+  nobody can join one, but a member's registration can still come back
+  (un-withdrawn, un-rejected, approved on a form that does not count pending
+  ones), and the group then earns the plan its new size qualifies for — its own
+  plan, and `confirmed`, if it is whole again. It moves **one way**: a short
+  group that loses another member keeps the rate it was reconciled onto,
+  because the deadline is the only thing allowed to charge anybody more.
+  Groups that refilled before this existed are caught up by *Recheck short
+  groups* (`RHRestoreShortGroups`), the way *Refresh payment states* catches up
+  old balances. `tests/test_restore.py` pins both directions.
 - **`target_size` and `plan_id` are copied onto the group at creation**, and plan
   ids are opaque generated keys (`forms._new_plan_id`). Renaming, repricing or
   reordering a plan must never retarget a group already forming under it.
@@ -181,7 +192,7 @@ Layered so the lower half never imports the upper half:
   list's *Customize list* dialog (`reglist.hide_internal_columns`). Anything
   that adds a fourth internal field has to do all three.
 - The plugin **never sends an invitation or any e-mail a participant can
-  trigger**. Group-state changes mail: confirmed, short, dissolved. The one
+  trigger**. Group-state changes mail: confirmed, short, restored, dissolved. The one
   hand-sent mail is the organizer's reminder to forming groups
   (`RHRemindFormingGroups`), and it reaches only a group's own members. Keep it
   that way — a participant-facing endpoint that mails a stranger is the thing

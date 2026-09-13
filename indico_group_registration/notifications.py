@@ -10,6 +10,8 @@ out through core's e-mail dialog instead; see `controllers.management` and
 `reminders`.
 """
 
+from decimal import Decimal
+
 from indico.core.notifications import make_email, send_email
 from indico.core.plugins import get_plugin_template_module
 
@@ -65,6 +67,28 @@ def notify_group_short(group, outcomes):
               new_price=new_price,
               balance_due=member.balance_due,
               paid_amount=member.paid_amount)
+
+
+def notify_group_restored(group, outcomes):
+    """A seat came back and the repricing has been undone.
+
+    The counterpart to `notify_group_short`, and it has to exist for the same
+    reason that one does: those members were told what they now owed, some of
+    them will have paid it, and nothing else in the plugin would ever tell them
+    it is no longer due.
+
+    `overpaid` is what a member who settled the balance has handed over above
+    the restored price.  The plugin cannot refund it -- Indico has no partial
+    anything -- so the mail names it and points at the people who can.
+    """
+    deadline = group.settings.format_reconciliation_dt() if group.reprices_on_member_loss else None
+    for member, registration in _live_members(group):
+        old_price, new_price = outcomes.get(member.id, (None, registration.price))
+        _send(group, member, registration, 'group_restored.txt',
+              old_price=old_price,
+              new_price=new_price,
+              overpaid=max(member.paid_amount - registration.price, Decimal(0)),
+              deadline=deadline)
 
 
 def notify_group_dissolved(group):

@@ -30,6 +30,8 @@ blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/remind/pre
                        'remind_forming_groups_preview', management.RHRemindFormingGroupsPreview, methods=('POST',))
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/settings', 'manage_settings',
                        management.RHGroupSettings, methods=('GET', 'POST'))
+blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/restore', 'restore_short_groups',
+                       management.RHRestoreShortGroups, methods=('POST',))
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/balances', 'manage_balances',
                        management.RHGroupBalances)
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/balances/refresh', 'refresh_balance_states',

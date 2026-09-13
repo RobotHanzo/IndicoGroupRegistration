@@ -26,7 +26,7 @@ from indico_group_registration.models.groups import GroupState, RegistrationGrou
 from indico_group_registration.models.members import GroupMember
 from indico_group_registration.models.settings import GroupSettings
 from indico_group_registration.notifications import notify_group_dissolved
-from indico_group_registration.operations import dissolve_group
+from indico_group_registration.operations import dissolve_group, lock_group, recount_group
 from indico_group_registration.pricing import pricing_in_progress, record_balance_payment, sync_balance_state
 from indico_group_registration.reconcile import reconcile_group
 from indico_group_registration.reminders import default_body, default_subject
@@ -192,12 +192,13 @@ class RHManageGroups(RHGroupRegFormBase):
 
     def _process(self):
         groups = _load_groups(self.regform)
-        # The count is what decides whether the reminder button is live; the
-        # dialog it opens quotes the deadline itself.
+        # Each count decides whether its own button is live; the reminder
+        # dialog quotes the deadline itself.
         forming_count = sum(group.state == GroupState.forming for group in groups)
+        short_count = sum(group.state == GroupState.short for group in groups)
         return WPGroupRegistration.render_template('group_registration:groups.html', self.event,
                                                    regform=self.regform, groups=groups, settings=self.settings,
-                                                   forming_count=forming_count)
+                                                   forming_count=forming_count, short_count=short_count)
 
 
 class _ReminderMixin:
@@ -388,6 +389,49 @@ class RHRecordBalancePayment(RHManageRegistrationBase):
         notify_registration_state_update(self.registration, from_management=True)
         db.session.commit()
         flash(_('The outstanding balance has been recorded as paid.'), 'success')
+        return jsonify_data(flash=False)
+
+
+class RHRestoreShortGroups(RHGroupRegFormBase):
+    """Give every short group back the rate the members it has now actually earn.
+
+    `operations.recount_group` does this by itself from here on, the moment a
+    member's registration comes back.  What it cannot do is reach backwards: a
+    group whose withdrawn member returned before this version was installed was
+    never recounted, and nothing will recount it on its own -- a short group
+    takes no joins, so there may never be another state change to ride on.
+
+    So this is the catch-up, and it is the same shape as *Refresh payment
+    states*, which exists for the memberships repriced before the plugin knew
+    to move them off "paid": a button an organizer presses once, that leaves
+    every group it has nothing to say about exactly as it found it.
+    """
+
+    def _process(self):
+        groups = (RegistrationGroup.query
+                  .filter_by(registration_form_id=self.regform.id, state=GroupState.short)
+                  .all())
+        restored = []
+        for group in groups:
+            # Through the lock like every other mutation: this one writes
+            # prices, and a member's state can be moving at the same time.
+            locked = lock_group(group)
+            before = (locked.state, locked.effective_plan_id)
+            recount_group(locked)
+            if (locked.state, locked.effective_plan_id) != before:
+                restored.append(locked)
+
+        if restored:
+            self.event.log(EventLogRealm.management, LogKind.change, 'Registration',
+                           f'Restored the group rate for {len(restored)} group(s) '
+                           f'on "{self.regform.title}"', session.user)
+        db.session.commit()
+        if restored:
+            flash(ngettext('One group was put back on the rate it qualifies for; its members have been told.',
+                           '{n} groups were put back on the rates they qualify for; their members have been told.',
+                           len(restored)).format(n=len(restored)), 'success')
+        else:
+            flash(_('Every short group already has the rate its current size earns.'), 'info')
         return jsonify_data(flash=False)
 
 

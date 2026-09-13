@@ -1,0 +1,55 @@
+{% extends 'emails/base.txt' %}
+
+{% block subject -%}
+    {% trans name=group.name %}The rate for your group "{{ name }}" has been restored{% endtrans %}
+{%- endblock %}
+
+{% block header_recipient -%}
+    {% trans name=registration.first_name %}Dear {{ name }}{% endtrans %}
+{%- endblock %}
+
+{% block body -%}
+{% set plan = group.pricing_plan -%}
+{% trans name=group.name, count=group.member_count -%}
+Your group "{{ name }}" is back to {{ count }} members, so the rate it was repriced to no longer applies.
+{%- endtrans %}
+
+{% if group.state.name == 'confirmed' %}
+{% trans label=plan.label if plan else '', target=group.target_size -%}
+It has its {{ target }} members again and is confirmed on the "{{ label }}" rate.
+{%- endtrans %}
+
+{#
+    The same fork `group_confirmed.txt` makes, for the same reason: with
+    `revoke_on_member_loss` on this rate can be taken away again, and a mail
+    about a rate coming back is the worst possible place to promise it stays.
+#}
+{% if group.reprices_on_member_loss %}
+{% trans target=group.target_size, deadline=deadline -%}
+It keeps that rate while it has its {{ target }} members. If one of them leaves or is rejected again and the group has not filled by {{ deadline }}, everyone in it is repriced.
+{%- endtrans %}
+{% else %}
+{% trans -%}
+This is final -- it will not change if members join or leave from now on.
+{%- endtrans %}
+{% endif %}
+{% else %}
+{% trans label=plan.label -%}
+It now qualifies for the "{{ label }}" rate, which has been applied.
+{%- endtrans %}
+{% endif %}
+
+{% trans price=registration.render_price() -%}
+The amount payable for your registration is now {{ price }}.
+{%- endtrans %}
+
+{% if overpaid > 0 %}
+{% trans paid=format_currency(member.paid_amount, registration.currency), overpaid=format_currency(overpaid, registration.currency) -%}
+You have already paid {{ paid }}, which is {{ overpaid }} more than that. Please contact the event organizers about the difference -- it cannot be refunded from here.
+{%- endtrans %}
+{% elif registration.state.name == 'unpaid' %}
+{% trans url=url_for('event_registration.display_regform', registration.locator.registrant, _external=true) -%}
+You can pay here: {{ url }}
+{%- endtrans %}
+{% endif %}
+{%- endblock %}

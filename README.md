@@ -59,10 +59,18 @@ left behind. Leaving `basePrice` alone is what keeps those two answers the same.
 | --- | --- |
 | `forming` | Seats filling. Members pay the chosen plan's rate, whenever they like. |
 | `confirmed` | The seat count was reached. Automatic. The rate is final and never gets worse — unless **Reprice a confirmed group that loses a member** is on, when a member leaving or being rejected puts the group back to `forming`. Every notice that quotes a confirmed member's price says which of the two it is. |
-| `short` | The deadline passed with seats empty. Repriced to whatever the group does qualify for; balances may be due. |
+| `short` | The deadline passed with seats empty. Repriced to whatever the group does qualify for; balances may be due. Not the last word: nobody can join a short group, but a member whose registration comes back — un-withdrawn, un-rejected, approved — re-earns the rate that size qualifies for, and a group that is whole again is confirmed on its own plan. Losing *another* member changes nothing; only the deadline charges people more. |
 | `dissolved` | A manager took it apart. Everyone is back on the standard rate. |
 
 The only transition a human triggers is dissolution.
+
+A group that refilled **before you upgraded to this version** was never
+rechecked. The plugin notices a returning member from the moment it is
+installed, and a short group takes no joins, so there may be no further state
+change for it to ride on. **Recheck short groups**, on the Groups page, catches
+those up: it puts every short group back on the rate the members it has now
+qualify for, e-mails them, and leaves every group it has nothing to say about
+exactly as it found it.
 
 ### Reconciliation, and the one thing to know before enabling this
 
@@ -110,7 +118,8 @@ for a participant to make your server e-mail a stranger. Leaders share the link
 themselves.
 
 The plugin does send e-mails that nobody can trigger on demand: group
-confirmed, group short with the new rate, and group dissolved.
+confirmed, group short with the new rate, group rate restored, and group
+dissolved.
 
 There is one more, and an organizer sends it. **Remind forming groups**, on the
 Groups page, opens Indico's own e-mail dialog with the recipients already found

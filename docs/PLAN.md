@@ -57,9 +57,12 @@ a rate:
 
 ```
 forming ──(member count reaches plan size)──▶ confirmed
-   │
-   └──(reconciliation deadline passes)──────▶ short
-                                               (repriced, balances due)
+   │                                              ▲
+   │                                              │
+   └──(reconciliation deadline passes)──▶ short ──┘
+                                          (repriced, balances due; a member
+                                           coming back re-earns the rate the
+                                           group's new size qualifies for)
 
 any state ──(manager acts)──▶ dissolved   (all discounts reverted)
 ```
@@ -77,7 +80,11 @@ any state ──(manager acts)──▶ dissolved   (all discounts reverted)
   checkout) all ask `RegistrationGroup.reprices_on_member_loss` before calling
   the amount final. A promise made on one page and taken back on another is the
   one thing worse than the repricing itself.
-- **`short`** — the deadline passed with the plan unmet. See §4.
+- **`short`** — the deadline passed with the plan unmet. See §4. Not
+  terminal: nobody can *join* a short group, but a member's registration can
+  still come back — un-withdrawn, un-rejected, approved — and the group then
+  earns the plan its new size qualifies for, which is its own plan, and
+  `confirmed`, if it is whole again.
 - **`dissolved`** — manager action; every member reverts to the standard rate.
 
 Which registration states count toward the target is a setting
@@ -102,6 +109,22 @@ over every group still `forming`.
      **e-mails them the new payable amount**.
 5. Every member is e-mailed either way: what the group reached, what plan now
    applies, what they now owe.
+
+The verdict is about a *size*, not a moment, so it comes back off a group whose
+size comes back. A short group takes no joins, but a member's registration can
+be un-withdrawn, un-rejected or approved afterwards, and `recount_group` then
+gives the group the plan its new count qualifies for — the chosen plan, and
+`confirmed`, once it is whole — and e-mails everyone that the balance they were
+asked for is no longer due. **One direction only**: a short group that loses
+*another* member keeps the rate it was reconciled onto. Charging people more is
+what the deadline is for, and doing it as a side effect of an organizer editing
+one registration would open balances with nothing behind them; taking a rate
+away on purpose is dissolution, which says so and writes to everybody.
+
+A member who has already settled the balance is then *overpaid*, and Indico can
+no more refund a difference than it can charge one — the restoration mail names
+the amount and points at the organizers. This is the same honest limitation as
+below, seen from the other side.
 
 ### The honest limitation
 

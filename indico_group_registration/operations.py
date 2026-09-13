@@ -14,6 +14,7 @@ from indico.util.i18n import _
 from indico_group_registration.constants import MAX_GROUP_NAME_LENGTH
 from indico_group_registration.models.groups import GroupState, RegistrationGroup, generate_code
 from indico_group_registration.models.members import GroupMember
+from indico_group_registration.plans import best_plan_for_size, get_plan
 from indico_group_registration.pricing import apply_group_pricing, clear_registration_pricing
 from indico_group_registration.util import clear_plan_choice, get_group_settings
 
@@ -223,13 +224,17 @@ def recount_group(group):
     """React to the seat count having changed.
 
     This is the auto-lock: reaching the plan's seat count confirms the group,
-    with no button anywhere.  It never runs on a group that has already been
-    reconciled or dissolved -- those rates are settled.
+    with no button anywhere.  A dissolved group is past all of this -- a
+    manager decided its rate.  A short one is not: the deadline priced it on
+    the seats it had at the time, and a seat can still come back.
     """
-    if group.state not in (GroupState.forming, GroupState.confirmed):
+    if group.state not in (GroupState.forming, GroupState.confirmed, GroupState.short):
         return group
 
     count = count_qualifying(group)
+
+    if group.state == GroupState.short:
+        return _restore_short_group(group, count)
 
     if group.state == GroupState.forming and count >= group.target_size:
         group.state = GroupState.confirmed
@@ -249,4 +254,59 @@ def recount_group(group):
         db.session.flush()
         apply_group_pricing(group)
 
+    return group
+
+
+def _restore_short_group(group, count):
+    """Give back the rate a returning member re-earns.
+
+    Reconciliation is a verdict on how big the group was at the deadline, and
+    that is not always the last word on how big it is: an organizer can
+    un-withdraw somebody, reverse a rejection, or approve a member on a form
+    that does not count pending ones.  Without this, a group that is whole
+    again goes on paying for the size it briefly was -- and the one member who
+    withdrew by mistake cannot be put back without the rest of their group
+    keeping the bill for it.
+
+    Upward only, and deliberately so.  A short group that loses *another*
+    member keeps the rate it was reconciled onto: charging people more is what
+    the deadline is for, and doing it as a side effect of an organizer editing
+    one registration would open balances with no notice and nothing to point
+    at.  Taking a rate away is `dissolve_group`, which says so and writes to
+    everybody.
+    """
+    refilled = count >= group.target_size
+    if refilled:
+        plan_id = group.plan_id
+    else:
+        best = best_plan_for_size(group.plans, count)
+        current = get_plan(group.plans, group.effective_plan_id)
+        # Plan sizes are unique, so the seat count is the whole ordering:
+        # a bigger plan is one the group did not qualify for before.
+        if best is None or best.size <= (current.size if current is not None else 0):
+            return group
+        plan_id = best.id
+
+    old_prices = {member.id: member.registration.price
+                  for member in group.members if member.registration is not None}
+
+    group.effective_plan_id = plan_id
+    if refilled:
+        # Exactly where the group would have been had the seat never emptied:
+        # confirmed on its chosen plan, and no longer carrying a verdict.  If
+        # it loses a member again `recount_group` drops it back to forming and
+        # the deadline reprices it like any other group that did not fill.
+        group.state = GroupState.confirmed
+        group.confirmed_dt = now_utc()
+        group.reconciled_dt = None
+    else:
+        group.reconciled_dt = now_utc()
+    db.session.flush()
+
+    apply_group_pricing(group)
+
+    outcomes = {member.id: (old_prices.get(member.id), member.registration.price)
+                for member in group.members if member.registration is not None}
+    from indico_group_registration.notifications import notify_group_restored
+    notify_group_restored(group, outcomes)
     return group

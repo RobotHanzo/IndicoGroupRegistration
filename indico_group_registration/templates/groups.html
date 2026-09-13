@@ -27,6 +27,23 @@
                           if forming_count else _('No group is still forming.') }}">
             {%- trans %}Remind forming groups{% endtrans %}{% if forming_count %} ({{ forming_count }}){% endif %}
         </button>
+        {#
+            The catch-up button.  A group whose withdrawn member came back is
+            repriced the moment it happens, but only from this version on --
+            `RHRestoreShortGroups` says why nothing reaches the ones that
+            refilled before it.  Nothing short means nothing to recheck, and a
+            disabled button never fires.
+        #}
+        <button class="i-button icon-loop {{ 'disabled' if not short_count }}"
+                {{ 'disabled' if not short_count }}
+                data-href="{{ url_for_plugin('group_registration.restore_short_groups', regform) }}"
+                data-method="POST"
+                data-reload-after
+                data-confirm="{% trans %}Check every short group against the members it has now? Any that have filled again go back on the rate they qualify for, and everyone in them is repriced and told.{% endtrans %}"
+                title="{{ _('Give back the rate to any short group whose members have since returned.')
+                          if short_count else _('No group is short.') }}">
+            {%- trans %}Recheck short groups{% endtrans %}{% if short_count %} ({{ short_count }}){% endif %}
+        </button>
         <a class="i-button icon-settings"
            href="{{ url_for_plugin('group_registration.manage_settings', regform) }}">
             {% trans %}Settings{% endtrans %}
