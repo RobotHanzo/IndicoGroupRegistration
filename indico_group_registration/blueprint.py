@@ -34,6 +34,8 @@ blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/balances',
                        management.RHGroupBalances)
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/balances/refresh', 'refresh_balance_states',
                        management.RHRefreshBalanceStates, methods=('POST',))
+blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/registrations/<int:registration_id>/group-balance',
+                       'record_balance_payment', management.RHRecordBalancePayment, methods=('POST',))
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/<int:group_id>/dissolve', 'dissolve_group',
                        management.RHDissolveGroup, methods=('POST',))
 blueprint.add_url_rule('/manage/registration/<int:reg_form_id>/groups/<int:group_id>/reconcile', 'reconcile_group',

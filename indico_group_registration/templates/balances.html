@@ -1,5 +1,6 @@
 {% extends 'events/management/base.html' %}
 {% from 'message_box.html' import message_box %}
+{% from 'group_registration:_balance_actions.html' import settle_button %}
 
 {% block title %}
     {% trans %}Balances due{% endtrans %}
@@ -33,7 +34,7 @@
             {% trans -%}
                 These people paid before their group was repriced. Indico cannot charge a difference -- a payment is
                 one amount against one registration -- so these balances have to be collected at the desk or by
-                transfer and then recorded against the registration as a manual payment.
+                transfer, and then recorded here with <em>Mark as paid</em>.
             {%- endtrans %}
             {% trans -%}
                 Until then each of them shows as "awaiting payment", here and in the check-in app, and the online
@@ -49,6 +50,7 @@
                     <th class="text-right">{% trans %}Paid{% endtrans %}</th>
                     <th class="text-right">{% trans %}Now owes{% endtrans %}</th>
                     <th class="text-right">{% trans %}Balance{% endtrans %}</th>
+                    <th></th>
                 </tr>
             </thead>
             <tbody>
@@ -73,6 +75,9 @@
                         <td class="text-right">
                             <strong>{{ format_currency(member.balance_due, registration.currency) }}</strong>
                         </td>
+                        <td class="text-right">
+                            {{ settle_button(registration, member) }}
+                        </td>
                     </tr>
                 {% endfor %}
             </tbody>
@@ -82,6 +87,7 @@
                     <td class="text-right">
                         <strong>{{ format_currency(total, regform.currency) }}</strong>
                     </td>
+                    <td></td>
                 </tr>
             </tfoot>
         </table>

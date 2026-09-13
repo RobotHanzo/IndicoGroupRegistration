@@ -16,7 +16,15 @@
     #}
     <tr class="group-registration-row">
       <td colspan="2">
-    <div class="i-box group-registration-panel" data-group-state="{{ group.state.name }}">
+    {#
+        `data-group-balance-due` is read by `balanceBadge.js`, which corrects the
+        invoice box: core prints "Paid" there from the transaction alone, so a
+        member repriced above what they handed over is labelled settled on the
+        very page that shows they are not.  The attribute is only on the panel
+        when there is something to correct.
+    #}
+    <div class="i-box group-registration-panel" data-group-state="{{ group.state.name }}"
+         {%- if membership.balance_due > 0 %} data-group-balance-due="{{ membership.balance_due }}"{% endif %}>
         <div class="i-box-header">
             <div class="i-box-title">
                 {% trans name=group.name %}Group: {{ name }}{% endtrans %}
@@ -81,24 +89,32 @@
                         {%- endtrans %}
                     {% endif %}
                 </p>
-                {% if membership.balance_due > 0 %}
-                    {# `i-callout` is not an Indico class; this is the one it really has. #}
-                    {% call message_box('warning') %}
-                        {% trans balance=format_currency(membership.balance_due, registration.currency) -%}
-                            You have an outstanding balance of {{ balance }}. Please contact the organizers to
-                            settle it.
-                        {%- endtrans %}
-                        {% trans -%}
-                            Until it is settled your registration stays on "awaiting payment". The checkout cannot
-                            take the difference on its own, so please arrange it with the organizers rather than
-                            paying again here.
-                        {%- endtrans %}
-                    {% endcall %}
-                {% endif %}
             {% elif group.state.name == 'dissolved' %}
                 <p>
                     {% trans %}This group has been dissolved by the organizers and no group rate applies.{% endtrans %}
                 </p>
+            {% endif %}
+
+            {#
+                Not confined to a short group: dissolving one puts its members
+                back on the standard rate, which raises the price of anybody who
+                had already paid the group's.  The organizer reads this off the
+                "Outstanding balance" section on their own page instead, which is
+                the one that carries the button.
+            #}
+            {% if membership.balance_due > 0 and not from_management %}
+                {# `i-callout` is not an Indico class; this is the one it really has. #}
+                {% call message_box('warning') %}
+                    {% trans balance=format_currency(membership.balance_due, registration.currency) -%}
+                        You have an outstanding balance of {{ balance }}. Please contact the organizers to
+                        settle it.
+                    {%- endtrans %}
+                    {% trans -%}
+                        Until it is settled your registration stays on "awaiting payment". The checkout cannot
+                        take the difference on its own, so please arrange it with the organizers rather than
+                        paying again here.
+                    {%- endtrans %}
+                {% endcall %}
             {% endif %}
 
             {% if group.state.name == 'forming' %}

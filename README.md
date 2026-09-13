@@ -77,16 +77,26 @@ still successful.
 
 The plugin corrects that where it counts. For as long as a member owes a
 top-up, their registration reads **awaiting payment** — in the registrant list,
-on their own page, and in the data the check-in app is given — and the online
-checkout is closed to them, with an explanation, so nobody pays the whole price
-a second time. It returns to complete on its own once the balance is settled.
+on their own page, and in the data the check-in app is given — the invoice box
+says **Balance due** instead of *Paid*, and the online checkout is closed to
+them, with an explanation, so nobody pays the whole price a second time. It
+returns to complete on its own once the balance is settled.
 
 The plugin also gives organizers a **Balances due** list (paid amount, new
 price, delta) and e-mails every affected member, but a person collects the
-money — at the desk or by transfer, recorded as a manual payment. That page's
-**Refresh payment states** button puts every member's state back in step with
-what they owe; it is only needed for groups repriced before this version.
-Two settings soften the whole problem:
+money — at the desk or by transfer.
+
+Once you have it, record it with **Mark balance as paid**: on the *Balances
+due* list, or in the *Outstanding balance* box at the top of that person's
+registration page. It writes the new total as the payment on record, takes them
+off *awaiting payment*, and sends them Indico's usual notification that their
+registration is complete. Do **not** use Indico's own *Mark as unpaid* to get
+at a *Mark as paid* button: that throws away the payment they did make and
+tells them by e-mail that they owe the whole amount again.
+
+That page's **Refresh payment states** button puts every member's state back in
+step with what they owe; it is only needed for groups repriced before this
+version. Two settings soften the whole problem:
 
 - set the **reconciliation deadline** well before the event, so balances
   surface while there is still time to chase them;

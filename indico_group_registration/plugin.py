@@ -69,6 +69,7 @@ class GroupRegistrationPlugin(IndicoPlugin):
 
         # Participant and management page fragments.
         self.template_hook('before-render-registration-info', self._inject_group_panel)
+        self.template_hook('extra-registration-actions', self._inject_balance_actions)
         self.template_hook('extra-regform-settings', self._inject_regform_settings)
 
         # Our own template overrides live here; see `templates/core/` for what
@@ -194,6 +195,21 @@ class GroupRegistrationPlugin(IndicoPlugin):
                                       registration=registration,
                                       from_management=from_management,
                                       switchable_plans=get_switchable_plans(membership.group))
+
+    def _inject_balance_actions(self, registration, **kwargs):
+        """The 'Outstanding balance' section on the management registration page.
+
+        Deliberately not gated on `is_enabled`: a balance is money somebody
+        owes, and switching group registration off on the form afterwards must
+        not take the only button that settles it away with it.
+        """
+        if not registration.event.can_manage(session.user, permission='registration'):
+            return ''
+        membership = registration.group_membership
+        if membership is None or membership.balance_due <= 0:
+            return ''
+        tpl = get_plugin_template_module('_balance_actions.html')
+        return tpl.render_balance_actions(membership=membership, registration=registration)
 
     def _inject_regform_settings(self, regform, **kwargs):
         """A row in the registration form's settings box."""

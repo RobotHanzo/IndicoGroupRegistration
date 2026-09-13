@@ -1,0 +1,55 @@
+{#
+    The outstanding-balance section on the management registration page, and
+    the button that settles it.
+
+    Core's own section above this one reads a repriced member badly: the state
+    is `unpaid` because `pricing.sync_balance_state` put it there, but
+    `registration.is_paid` is still true, so core prints "Registration not paid
+    yet -- the current transaction is still pending" and offers no button at
+    all.  This says what actually happened and gives the organizer the one
+    action there is.
+
+    The confirmation is one line on purpose: Jinja keeps every newline and
+    indent inside a `{% trans %}`, and an attribute is read back verbatim.
+#}
+
+{% macro settle_button(registration, membership) %}
+    <button class="i-button"
+            data-href="{{ url_for_plugin('group_registration.record_balance_payment', registration) }}"
+            data-method="POST"
+            data-reload-after
+            data-title="{% trans %}Record the outstanding balance{% endtrans %}"
+            data-confirm="{% trans name=registration.full_name, balance=format_currency(membership.balance_due, registration.currency), price=registration.render_price() %}Record that {{ name }} has handed over the outstanding {{ balance }}? The registration is then on record as having paid {{ price }} in full, and they are sent Indico's usual notification that their registration is complete.{% endtrans %}">
+        {% trans %}Mark balance as paid{% endtrans %}
+    </button>
+{% endmacro %}
+
+{% macro render_balance_actions(membership, registration) %}
+    <div class="section">
+        <div class="icon icon-coins"></div>
+        <div class="text">
+            <div class="label">
+                {% trans %}Outstanding balance{% endtrans %}
+            </div>
+            {% trans name=membership.group.name,
+                     paid=format_currency(membership.paid_amount, registration.currency),
+                     price=registration.render_price(),
+                     balance=format_currency(membership.balance_due, registration.currency) -%}
+                This registration was repriced after it was paid: {{ paid }} was received and the group
+                "{{ name }}" now costs {{ price }}, leaving {{ balance }} outstanding. Indico records one
+                payment per registration, so collect the difference at the desk or by transfer and record
+                it here.
+            {%- endtrans %}
+        </div>
+        <div class="toolbar">
+            <div class="group">
+                <span class="i-button label icon-coins">
+                    {{ format_currency(membership.balance_due, registration.currency) }}
+                </span>
+            </div>
+            <div class="group">
+                {{ settle_button(registration, membership) }}
+            </div>
+        </div>
+    </div>
+{% endmacro %}

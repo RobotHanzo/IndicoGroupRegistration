@@ -119,6 +119,25 @@ Layered so the lower half never imports the upper half:
   a balance is due (and only between `complete` and `unpaid` — pending, rejected
   and withdrawn are somebody else's decision). Anything that changes what a
   member owes must go through it.
+- **Collecting that balance has to write the transaction itself.**
+  `PaymentTransaction.create_next` answers `IgnoredTransactionAction` to a
+  manual `complete` on a successful transaction, so core offers an already-paid
+  registration only *Mark as unpaid* — which cancels the payment the member did
+  make and mails them that they owe the whole amount again.
+  `pricing.record_balance_payment` therefore builds the transaction the way
+  `create_next` does and skips only the transition it refuses, recording
+  **`registration.price`** — the new total, which is what
+  `GroupMember.paid_amount` reads back — and not the balance.
+  `tests/test_balances.py` pins that.
+- **Three places show a balance and none of them is core's.** The organizer gets
+  an *Outstanding balance* section through `extra-registration-actions` and a
+  row on the *Balances due* page; the participant gets the group panel's
+  warning, which is keyed on `balance_due` and not on the group being `short`,
+  because dissolving a group raises its members' price the same way. The
+  invoice box's *Paid* badge comes off the transaction alone and `render_invoice`
+  has no hook, so `client/js/balanceBadge.js` corrects it off the
+  `data-group-balance-due` marker the panel carries — a name two files share and
+  nothing enforces but that test.
 - **`pricing.pricing_in_progress()` is a thread-local re-entrancy guard.** Our
   own `sync_state` / `sync_balance_state` calls re-fire
   `registration_state_updated`; `handlers.handle_registration_state_updated`

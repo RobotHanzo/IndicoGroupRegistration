@@ -6,13 +6,15 @@ from werkzeug.exceptions import NotFound
 
 from indico.core.db import db
 from indico.core.plugins import WPJinjaMixinPlugin, url_for_plugin
-from indico.modules.events.registration.controllers.management import RHManageRegFormBase, RHManageRegFormsBase
+from indico.modules.events.registration.controllers.management import (RHManageRegFormBase, RHManageRegFormsBase,
+                                                                       RHManageRegistrationBase)
 from indico.modules.events.registration.controllers.management.reglists import (RHRegistrationEmailRegistrants,
                                                                                 RHRegistrationEmailRegistrantsPreview)
 from indico.modules.events.registration.forms import EmailRegistrantsForm
 from indico.modules.events.registration.models.form_fields import RegistrationFormFieldData
 from indico.modules.events.registration.models.forms import RegistrationForm
 from indico.modules.events.registration.models.registrations import Registration, RegistrationData
+from indico.modules.events.registration.notifications import notify_registration_state_update
 from indico.modules.events.registration.views import WPManageRegistration
 from indico.modules.logs import EventLogRealm, LogKind
 from indico.util.i18n import _, ngettext
@@ -25,7 +27,7 @@ from indico_group_registration.models.members import GroupMember
 from indico_group_registration.models.settings import GroupSettings
 from indico_group_registration.notifications import notify_group_dissolved
 from indico_group_registration.operations import dissolve_group
-from indico_group_registration.pricing import pricing_in_progress, sync_balance_state
+from indico_group_registration.pricing import pricing_in_progress, record_balance_payment, sync_balance_state
 from indico_group_registration.reconcile import reconcile_group
 from indico_group_registration.reminders import default_body, default_subject
 from indico_group_registration.util import get_group_settings, provision_fields
@@ -350,6 +352,42 @@ class RHRefreshBalanceStates(RHGroupRegFormBase):
                            changed).format(n=changed), 'success')
         else:
             flash(_('Every registration already shows the right payment state.'), 'info')
+        return jsonify_data(flash=False)
+
+
+class RHRecordBalancePayment(RHManageRegistrationBase):
+    """Record that one member settled the balance their group's repricing left.
+
+    Core's *Mark as paid* is not offered to a registration whose transaction is
+    already successful, and its *Mark as unpaid* would throw the payment away
+    to get there; `pricing.record_balance_payment` explains why this has to
+    write the transaction itself.  The mail that goes out afterwards is core's
+    own state-update notification, the same one an organizer's *Mark as paid*
+    sends on any other registration -- it reaches the registrant and nobody
+    else.
+    """
+
+    def _process(self):
+        membership = self.registration.group_membership
+        if membership is None:
+            flash(_('That registration is not in a group.'), 'warning')
+            return jsonify_data(flash=False)
+
+        amount = record_balance_payment(self.registration, session.user)
+        if amount is None:
+            flash(_('That registration has no outstanding balance.'), 'warning')
+            return jsonify_data(flash=False)
+
+        self.event.log(EventLogRealm.management, LogKind.positive, 'Registration',
+                       f'Recorded a group balance payment of {amount} {self.registration.currency} '
+                       f'for #{self.registration.friendly_id}',
+                       session.user, meta={'registration_id': self.registration.id})
+        # Queued here rather than after the commit: Indico holds a request's
+        # mail until the transaction lands, and drops it if the transaction
+        # does not.
+        notify_registration_state_update(self.registration, from_management=True)
+        db.session.commit()
+        flash(_('The outstanding balance has been recorded as paid.'), 'success')
         return jsonify_data(flash=False)
 
 

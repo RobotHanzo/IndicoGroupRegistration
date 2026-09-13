@@ -11,6 +11,7 @@ from decimal import Decimal
 
 from indico.core import signals
 from indico.core.db import db
+from indico.modules.events.payment.models.transactions import PaymentTransaction, TransactionStatus
 from indico.modules.events.registration.models.registrations import RegistrationState
 
 from indico_group_registration.plans import discount_for, discountable_amount, quantize
@@ -170,3 +171,47 @@ def sync_balance_state(registration):
     else:
         return
     signals.event.registration_state_updated.send(registration, previous_state=previous_state)
+
+
+def record_balance_payment(registration, user):
+    """Record that a member handed over the balance their repricing created.
+
+    Returns the amount settled, or ``None`` if nothing was owed.
+
+    Core cannot do this, which is why the button is missing rather than merely
+    hidden: `toggle_registration_payment` asks `PaymentTransaction.create_next`
+    for a manual `complete`, and the transaction state machine answers
+    `IgnoredTransactionAction` to a manual complete on a successful
+    transaction.  The only button core offers an already-paid registration is
+    *Mark as unpaid*, and going round that way cancels the payment the member
+    did make -- telling them by e-mail that they owe the whole amount again --
+    before a second click puts it back.
+
+    So the transaction is written the way `create_next` writes one, skipping
+    only the transition it refuses.  The row the member actually paid against
+    stays in `registration.transactions`; this one supersedes it and records
+    the total received, which is what `GroupMember.paid_amount` reads back.
+    """
+    membership = registration.group_membership
+    if membership is None:
+        return None
+    balance = membership.balance_due
+    if balance <= 0:
+        return None
+
+    transaction = PaymentTransaction(status=TransactionStatus.successful,
+                                     amount=registration.price,
+                                     currency=registration.currency,
+                                     # The column's own default, and the value core's manual
+                                     # path lands on; `is_manual` is what picks the template
+                                     # the "Payment transaction" box renders.
+                                     provider='_manual',
+                                     data={'changed_by_name': user.full_name, 'changed_by_id': user.id})
+    registration.transaction = transaction
+    with pricing_in_progress():
+        db.session.flush()
+        # Nothing is owed any more, so this is the call that takes them off
+        # "awaiting payment" -- core's `sync_state` leaves a priced
+        # registration where it is.
+        sync_balance_state(registration)
+    return balance

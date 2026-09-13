@@ -1,5 +1,6 @@
 // Registers this plugin's field types with the registration form's field
-// registry and wires up the copy buttons on the group panel.
+// registry, wires up the copy buttons on the group panel, and corrects the
+// invoice box for a member who owes a repricing balance.
 //
 // Both field types have to be registered, including the internal one. The form
 // editor's `ShowIfInput` looks every item's input type up in the registry
@@ -9,6 +10,7 @@
 
 import {registerPluginObject} from 'indico/utils/plugins';
 
+import setupBalanceBadge from './balanceBadge';
 import GroupDiscountField from './GroupDiscountField';
 import GroupPlanInput from './GroupPlanInput';
 import setupGroupPanel from './groupPanel';
@@ -48,4 +50,7 @@ registerPluginObject('group_registration', 'regformCustomFields', {
   noInternalName: true,
 });
 
-document.addEventListener('DOMContentLoaded', setupGroupPanel);
+document.addEventListener('DOMContentLoaded', () => {
+  setupGroupPanel();
+  setupBalanceBadge();
+});

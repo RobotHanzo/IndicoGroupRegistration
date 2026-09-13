@@ -110,6 +110,18 @@ controller, at the cost of coupling to that controller's identity.
 
 Note there is **no** hook inside the `render_invoice` macro.
 
+That is a gap with consequences rather than a curiosity. The macro prints its
+"Paid" badge from `registration.transaction.status` alone
+(`display/_registration_summary_blocks.html:248`), so a member repriced above
+what they already handed over is labelled settled — on the organizer's page and
+on their own, next to the very figures that show they are not. The file is
+imported by every registration page in the instance, so replacing it through a
+customization path would be a fork far wider than this plugin's business. The
+badge is corrected in the browser instead (`client/js/balanceBadge.js`), off a
+`data-group-balance-due` marker the group panel carries only while a balance is
+open; the action that settles it goes in through `extra-registration-actions`
+above.
+
 ### Overriding a core template
 
 `signals.plugin.get_template_customization_paths` (`core/signals/plugin.py:74`)
