@@ -1,5 +1,7 @@
 """Lookups and provisioning helpers shared by the rest of the plugin."""
 
+from uuid import UUID
+
 from indico.core.db import db
 from indico.modules.events.registration.models.form_fields import RegistrationFormField
 from indico.modules.events.registration.models.items import RegistrationFormSection
@@ -61,8 +63,23 @@ def find_group_by_code(regform, code):
 
 
 def find_group_by_uuid(regform, join_uuid):
+    """The group a join link points at, or ``None`` if nothing does.
+
+    The value arrives straight off the URL, and `join_uuid` is a Postgres
+    `uuid` column: comparing it against something that is not a UUID does not
+    simply fail to match, it aborts the statement with `DataError` -- which
+    reaches the participant as a 500 (and, on Indico's shipped logging config,
+    mails the operator a traceback) instead of the "that group link is no
+    longer valid" flash a mistyped link deserves.  So parse it first and treat
+    an unparseable one as no group, the way core does with the same kind of
+    token in `RegistrationForm.get_registration` and `InvitationMixin`.
+    """
+    try:
+        parsed = UUID(hex=str(join_uuid))
+    except ValueError:
+        return None
     return (RegistrationGroup.query
-            .filter_by(registration_form_id=regform.id, join_uuid=str(join_uuid))
+            .filter_by(registration_form_id=regform.id, join_uuid=str(parsed))
             .first())
 
 
