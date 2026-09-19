@@ -3,7 +3,14 @@
 {% macro render_group_panel(membership, group, registration, from_management=false, switchable_plans=()) %}
     {% set plan = group.pricing_plan %}
     {% set chosen = group.chosen_plan %}
-    {% set is_leader = group.leader_registration_id == registration.id %}
+    {#
+        Leadership is not taken off a leader whose registration is withdrawn or
+        rejected, so being the recorded leader is not enough to be offered the
+        leader's two buttons: `RHGroupLeaderBase._check_access` refuses both to
+        anybody core no longer calls active, and a button that answers 403 is
+        worse than no button.
+    #}
+    {% set is_leader = group.leader_registration_id == registration.id and registration.is_active %}
     {% set join_url = url_for_plugin('group_registration.join_link', group.registration_form,
                                      join_uuid=group.join_uuid, _external=true) %}
 

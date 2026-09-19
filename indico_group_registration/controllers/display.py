@@ -49,12 +49,31 @@ class RHGroupBase(RHRegistrationFormRegistrationBase):
 
 
 class RHGroupLeaderBase(RHGroupBase):
-    """Only the leader may do this."""
+    """Only the leader may do this, and only while they are still in the event.
+
+    Being the recorded leader is not the same as being a participant.  Nothing
+    takes the group off somebody whose own registration dies: core's
+    `RegistrationForm.get_registration` hands back withdrawn and rejected
+    registrations just the same, the `GroupMember` row outlives a state change
+    (only `registration_deleted` reaches `leave_group`), and leadership passes
+    on only when the leader *leaves*.  An id comparison on its own therefore
+    leaves a rejected or withdrawn leader holding everyone else's price --
+    `switch_plan` reprices every remaining member, and a new join link revokes
+    every copy the group has shared.
+
+    `is_active` is core's own definition -- not deleted, not rejected, not
+    withdrawn -- which is the rule the seat count and the plugin's mail already
+    keep to.  Only the leader-only endpoints ask it: `RHLeaveGroup` stays on
+    `RHGroupBase`, because getting *out* of a group is the one thing a member
+    whose registration has died must still be able to do.
+    """
 
     def _check_access(self):
         RHGroupBase._check_access(self)
         if self.group.leader_registration_id != self.registration.id:
             raise Forbidden(_('Only the group leader can do that.'))
+        if not self.registration.is_active:
+            raise Forbidden(_('Your registration is no longer active, so you cannot act as the group leader.'))
 
 
 class RHCheckGroupCode(RHRegistrationFormBase, RHProtected):
