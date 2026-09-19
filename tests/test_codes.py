@@ -1,7 +1,11 @@
 """Group codes: generation, normalization and display."""
 
+from types import SimpleNamespace
+from uuid import UUID
+
 import pytest
 
+from indico_group_registration import operations
 from indico_group_registration.models.groups import CODE_ALPHABET, CODE_LENGTH, GroupState, generate_code
 from indico_group_registration.util import format_code, normalize_code
 
@@ -75,3 +79,43 @@ class TestGroupState:
     ))
     def test_accepts_members(self, state, accepts):
         assert state.accepts_members is accepts
+
+
+class TestRegenerateJoinCredentials:
+    """The join link and the code are one credential, so they rotate together.
+
+    `RHGroupJoinLink` redirects whoever follows a link to the registration form
+    with `group_code` in the query string, so a link that has been shared is a
+    code that has been shared -- browser history, screenshots and proxy logs
+    included.  Rotating `join_uuid` alone leaves the panel's promise that every
+    link already shared stops working false: nothing else in the plugin ever
+    regenerates the code, so the one handed out by the old link still joins.
+    """
+
+    ORIGINAL_UUID = '11111111-1111-1111-1111-111111111111'
+
+    @pytest.fixture
+    def group(self, monkeypatch):
+        """A stand-in group: the rotation is pure enough to test without a database."""
+        monkeypatch.setattr(operations, 'lock_group', lambda group: group)
+        monkeypatch.setattr(operations, 'db', SimpleNamespace(session=SimpleNamespace(flush=lambda: None)))
+        return SimpleNamespace(join_uuid=self.ORIGINAL_UUID, code='ABCD2345', registration_form=object())
+
+    def test_rotates_the_code_with_the_link(self, group, monkeypatch):
+        monkeypatch.setattr(operations, '_generate_unique_code', lambda regform: 'WXYZ6789')
+        operations.regenerate_join_credentials(group)
+        assert group.code == 'WXYZ6789'
+        assert group.join_uuid != self.ORIGINAL_UUID
+        UUID(group.join_uuid)
+
+    def test_the_new_code_is_allocated_against_the_form(self, group, monkeypatch):
+        """Codes are only unique per registration form, so the allocator needs it."""
+        asked = []
+
+        def fake_generate(regform):
+            asked.append(regform)
+            return 'WXYZ6789'
+
+        monkeypatch.setattr(operations, '_generate_unique_code', fake_generate)
+        operations.regenerate_join_credentials(group)
+        assert asked == [group.registration_form]

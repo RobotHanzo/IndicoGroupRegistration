@@ -5,6 +5,8 @@ ten-seat group will otherwise both read a count of nine, and the group either
 overfills or never trips its own auto-confirm.
 """
 
+from uuid import uuid4
+
 from indico.core.db import db
 from indico.core.errors import UserValueError
 from indico.modules.events.registration.models.registrations import Registration, RegistrationState
@@ -207,6 +209,24 @@ def switch_plan(group, plan):
     db.session.flush()
     apply_group_pricing(group)
     recount_group(group)
+    return group
+
+
+def regenerate_join_credentials(group):
+    """Issue a new join link *and* a new code, so that sharing one revokes both.
+
+    Both, because the link hands the code over: `RHGroupJoinLink` sends whoever
+    follows a link on to the registration form with `group_code` in the query
+    string, so every browser history, screenshot and proxy log that saw a
+    shared link holds the code too.  Rotating `join_uuid` alone would leave the
+    panel's promise -- that every link already shared stops working -- false,
+    because the code it handed out still joins the group and nothing else ever
+    regenerates it.
+    """
+    group = lock_group(group)
+    group.join_uuid = str(uuid4())
+    group.code = _generate_unique_code(group.registration_form)
+    db.session.flush()
     return group
 
 

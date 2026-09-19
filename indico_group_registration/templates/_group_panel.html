@@ -204,8 +204,8 @@
                                 data-href="{{ url_for_plugin('group_registration.regenerate_link', **registration.locator.registrant) }}"
                                 data-method="POST"
                                 data-reload-after
-                                data-confirm="{% trans %}Generate a new join link? Every link you have already shared will stop working.{% endtrans %}">
-                            {% trans %}New join link{% endtrans %}
+                                data-confirm="{% trans %}Generate a new join link and group code? Every link and every code you have already shared will stop working.{% endtrans %}">
+                            {% trans %}New link and code{% endtrans %}
                         </button>
                     {% endif %}
                     {% if group.state.name in ('forming', 'confirmed') and not registration.is_paid %}

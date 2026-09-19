@@ -17,7 +17,8 @@ from indico.web.flask.util import url_for
 from indico.web.rh import RHProtected
 from indico.web.util import jsonify_data
 
-from indico_group_registration.operations import GroupError, leave_group, switch_plan
+from indico_group_registration.operations import (GroupError, leave_group, regenerate_join_credentials,
+                                                 switch_plan)
 from indico_group_registration.plans import get_plan
 from indico_group_registration.util import (find_group_by_uuid, format_code, get_plans, is_enabled,
                                             resolve_join_target)
@@ -169,13 +170,21 @@ class RHLeaveGroup(RHGroupBase):
 
 
 class RHRegenerateJoinLink(RHGroupLeaderBase):
-    """Replace the join link, revoking every copy already shared."""
+    """Replace the join link and the code, revoking every copy already shared.
+
+    The code goes with the link because `RHGroupJoinLink` puts it in the query
+    string of the URL it redirects to: a link that has been shared is a code
+    that has been shared, so revoking one without the other revokes nothing.
+    """
 
     def _process(self):
-        from uuid import uuid4
-        self.group.join_uuid = str(uuid4())
+        try:
+            regenerate_join_credentials(self.group)
+        except GroupError as exc:
+            flash(str(exc), 'error')
+            return self._done()
         db.session.commit()
-        flash(_('A new join link has been generated. The old one no longer works.'), 'success')
+        flash(_('A new join link and group code have been generated. The old ones no longer work.'), 'success')
         return self._done()
 
 
